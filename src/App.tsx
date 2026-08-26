@@ -56,7 +56,7 @@ function NotebookEditor({ notebook, onSave, expose }: { notebook: Notebook; onSa
 
   return <ModelProvider value={model}>
     <div className="editor-shell">
-      <BlockNoteView editor={editor} slashMenu={false} onChange={() => {
+      <BlockNoteView editor={editor} theme="light" slashMenu={false} onChange={() => {
         const next = editor.document as any[];
         setDocumentBlocks([...next]);
         onSave(JSON.parse(JSON.stringify(next)));
