@@ -14,6 +14,7 @@ describe("get_model summary", () => {
   it("returns slim fields and only format-matching metadata by default", () => {
     const summary = getModelSummary(referencedDocument as any, { locale: "en-US" });
     expect(summary[0]).toEqual({
+      blockId: "number",
       name: "revenue",
       kind: "input",
       value: 10,
@@ -23,6 +24,7 @@ describe("get_model summary", () => {
       currency: "USD",
     });
     expect(summary[1]).toEqual({
+      blockId: "formula",
       name: "double",
       kind: "formula",
       value: 20,

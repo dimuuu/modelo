@@ -13,6 +13,7 @@ import type {
   NotebookReplaceParagraphArgs,
   NotebookSetVariableArgs,
   NotebookUpdateBlockArgs,
+  NotebookUpdateBlocksArgs,
   NotebookWriteSectionArgs,
   NotebookWriteSectionsArgs,
   WorkspaceCreateArgs,
@@ -72,8 +73,8 @@ const renameSchema = {
   additionalProperties: false,
 } as const;
 
-const nameProperty = { type: "string", pattern: "^[A-Za-z_][A-Za-z0-9_]*$", description: "Unique MathJS-safe variable name." } as const;
-const decimalsProperty = { type: "integer", minimum: 0, maximum: 8, description: "Fixed display decimals (0-8). If omitted, currency uses 0 for integers and 2 otherwise." } as const;
+const nameProperty = { type: "string", pattern: "^[A-Za-z_][A-Za-z0-9_]*$" } as const;
+const decimalsProperty = { type: "integer", minimum: 0, maximum: 8 } as const;
 const optionProperty = {
   type: "array",
   items: { type: "object", properties: { label: { type: "string" }, value: { type: "number" } }, required: ["label", "value"], additionalProperties: false },
@@ -94,15 +95,14 @@ const insertBlocksSchema = {
       minItems: 1,
       items: { anyOf: [
         { type: "object", properties: { id: { type: "string" }, type: { const: "heading" }, text: { type: "string" }, level: { type: "integer", enum: [1, 2, 3], default: 2 } }, required: ["type", "text"], additionalProperties: false },
-        { type: "object", properties: { id: { type: "string" }, type: { const: "paragraph" }, text: { type: "string", description: "Plain text; known @name tokens become live references." } }, required: ["type", "text"], additionalProperties: false },
+        { type: "object", properties: { id: { type: "string" }, type: { const: "paragraph" }, text: { type: "string" } }, required: ["type", "text"], additionalProperties: false },
         { type: "object", properties: { id: { type: "string" }, type: { const: "bullet" }, text: { type: "string" } }, required: ["type", "text"], additionalProperties: false },
         ...(["number", "slider", "select", "boolean"] as const).map((type) => ({ type: "object" as const, properties: { id: { type: "string" as const }, type: { const: type }, ...inputProperties }, required: ["type", "name", "value"] as const, additionalProperties: false })),
         { type: "object", properties: { id: { type: "string" }, type: { const: "formula" }, name: nameProperty, formula: { type: "string", minLength: 1, pattern: "\\S" }, label: { type: "string", minLength: 1 } }, required: ["type", "name", "formula"], additionalProperties: false },
       ] },
-      description: "Typed blocks to insert in document order. Prefer write_section for complete narrative sections.",
     },
-    referenceBlockId: { type: "string", minLength: 1, description: "Existing block id used as the insertion anchor. Omit to append." },
-    placement: { type: "string", enum: ["before", "after"], description: "Position relative to referenceBlockId; defaults to after." },
+    referenceBlockId: { type: "string", minLength: 1 },
+    placement: { type: "string", enum: ["before", "after"] },
   },
   required: ["blocks"],
   additionalProperties: false,
@@ -160,19 +160,25 @@ const writeSectionSchema = {
     },
     referenceBlockId: { type: "string", minLength: 1, description: "Existing block id used as the insertion anchor. Omit to append." },
     placement: { type: "string", enum: ["before", "after"], description: "Position relative to referenceBlockId; defaults to after." },
+    dry_run: { type: "boolean", description: "Preview without writing." },
   },
   required: ["heading", "body"],
   additionalProperties: false,
 } as const;
 
+const { dry_run: _sectionDryRun, ...writeSectionItemProperties } = writeSectionSchema.properties;
+
 const writeSectionsSchema = {
   type: "object",
-  properties: { sections: { type: "array", minItems: 1, items: writeSectionSchema } },
+  properties: {
+    sections: { type: "array", minItems: 1, items: { ...writeSectionSchema, properties: writeSectionItemProperties } },
+    dry_run: { type: "boolean", description: "Preview without writing." },
+  },
   required: ["sections"],
   additionalProperties: false,
 } as const;
 
-const updateId = { type: "string", minLength: 1, description: "Block id to update." } as const;
+const updateId = { type: "string", minLength: 1 } as const;
 const namedValueProperties = {
   id: updateId,
   name: inputProperties.name,
@@ -198,6 +204,13 @@ const updateBlockSchema = {
     { type: "object", properties: { ...namedValueProperties, options: inputProperties.options }, required: ["id"], minProperties: 2, additionalProperties: false },
     { type: "object", properties: namedValueProperties, required: ["id"], minProperties: 2, additionalProperties: false },
   ],
+} as const;
+
+const updateBlocksSchema = {
+  type: "object",
+  properties: { blocks: { type: "array", minItems: 1, items: updateBlockSchema } },
+  required: ["blocks"],
+  additionalProperties: false,
 } as const;
 
 const variableSelectorProperties = {
@@ -424,14 +437,14 @@ export function useModeloTools(adapter: ModeloToolsAdapter): ModeloToolsState {
   });
   const notebookWriteSection = useWebMCP<NotebookWriteSectionArgs>({
     name: "write_section",
-    description: "Add a readable section: heading, short prose, and only the inputs the reader will change. Put results in the sentences with @name.",
+    description: "Add one prose-first section. Use format number for counts/loan terms; unit year means a duration. Supports dry_run.",
     inputSchema: writeSectionSchema,
     enabled: notebookEnabled,
     execute: (args) => callNotebook((notebook) => notebook.writeSection(args)),
   });
   const notebookWriteSections = useWebMCP<NotebookWriteSectionsArgs>({
     name: "write_sections",
-    description: "Add multiple prose-first sections atomically in the supplied order.",
+    description: "Add sections atomically, or preview with dry_run. Examples: 1 + mortgage_rate; price * (1 + tax_rate); principal * rate / 12; 5 km + 500 m. Percent inputs are formula ratios. Use number for counts/loan terms; unit year is a duration.",
     inputSchema: writeSectionsSchema,
     enabled: notebookEnabled,
     execute: (args) => callNotebook((notebook) => notebook.writeSections(args)),
@@ -442,6 +455,13 @@ export function useModeloTools(adapter: ModeloToolsAdapter): ModeloToolsState {
     inputSchema: updateBlockSchema,
     enabled: notebookEnabled,
     execute: (args) => callNotebook((notebook) => notebook.updateBlock(args)),
+  });
+  const notebookUpdateBlocks = useWebMCP<NotebookUpdateBlocksArgs>({
+    name: "update_blocks",
+    description: "Update multiple blocks atomically.",
+    inputSchema: updateBlocksSchema,
+    enabled: notebookEnabled,
+    execute: (args) => callNotebook((notebook) => notebook.updateBlocks(args)),
   });
   const notebookRemoveBlocks = useWebMCP<NotebookRemoveBlocksArgs>({
     name: "remove_blocks",
@@ -493,6 +513,7 @@ export function useModeloTools(adapter: ModeloToolsAdapter): ModeloToolsState {
     notebook_write_sections: notebookWriteSections,
     notebook_insert_blocks: notebookInsertBlocks,
     notebook_update_block: notebookUpdateBlock,
+    notebook_update_blocks: notebookUpdateBlocks,
     notebook_remove_blocks: notebookRemoveBlocks,
     notebook_remove_variable: notebookRemoveVariable,
     notebook_replace_paragraph: notebookReplaceParagraph,

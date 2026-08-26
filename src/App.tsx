@@ -75,6 +75,17 @@ function mutationResult(before: any[], after: any[], workspace: Workspace, extra
   };
 }
 
+function previewInsert(document: any[], blocks: any[], referenceBlockId?: string, placement: "before" | "after" = "after"): any[] {
+  if (!referenceBlockId) {
+    if (document.length === 1 && document[0].type === "paragraph" && textContent(document[0]) === "") return [...blocks];
+    return [...document, ...blocks];
+  }
+  const index = document.findIndex((block) => block.id === referenceBlockId);
+  if (index < 0) fault("NOT_FOUND", `Block '${referenceBlockId}' not found.`);
+  const at = placement === "before" ? index : index + 1;
+  return [...document.slice(0, at), ...blocks, ...document.slice(at)];
+}
+
 function NotebookEditor({ notebook, workspace, onSave, expose }: { notebook: Notebook; workspace: Workspace; onSave: (blocks: unknown[]) => void; expose: (editor: ModeloEditor | null) => void }) {
   const initial = useMemo(() => {
     const blocks = portableToEditorBlocks(notebook.blocks as any[]);
@@ -146,6 +157,52 @@ export default function App() {
       const found = model.idByName[name];
       if (found && found !== exceptId) fault("DUPLICATE_VARIABLE_NAME", `Variable '${name}' already exists.`);
     };
+    const prepareUpdate = (editor: ModeloEditor, args: any) => {
+      const { id, ...fields } = args;
+      const block = editor.getBlock(id) as any;
+      if (!block) fault("NOT_FOUND", `Block '${id}' not found.`);
+      const keys = Object.keys(fields);
+      const inputFields: Record<string, Set<string>> = {
+        number: new Set(["name", "label", "value", "format", "currency", "unit", "decimals", "min", "max", "step"]),
+        slider: new Set(["name", "label", "value", "format", "currency", "unit", "decimals", "min", "max", "step"]),
+        select: new Set(["name", "label", "value", "options"]),
+        boolean: new Set(["name", "label", "value"]),
+      };
+      if (block.type === "formula") {
+        if (keys.length !== 1 || keys[0] !== "formula") fault("INVALID_UPDATE", "Formula updates require exactly { id, formula }.");
+      } else if (["heading", "paragraph", "bulletListItem", "numberedListItem", "checkListItem"].includes(block.type)) {
+        const allowed = block.type === "heading" ? new Set(["text", "level"]) : new Set(["text"]);
+        if (!keys.length || keys.some((key) => !allowed.has(key))) fault("INVALID_UPDATE", `Fields are not valid for ${block.type}.`);
+      } else if (inputFields[block.type]) {
+        if (!keys.length || keys.some((key) => !inputFields[block.type].has(key))) fault("INVALID_UPDATE", `Fields are not valid for ${block.type}.`);
+        for (const key of ["value", "min", "max", "step", "decimals"]) if (fields[key] !== undefined && !Number.isFinite(fields[key])) fault("INVALID_VALUE", `${key} must be finite.`);
+        if (fields.step !== undefined && fields.step <= 0) fault("INVALID_VALUE", "step must be positive.");
+        if (fields.decimals !== undefined && (!Number.isInteger(fields.decimals) || fields.decimals < 0 || fields.decimals > 8)) fault("INVALID_VALUE", "decimals must be an integer from 0 to 8.");
+        const min = fields.min ?? block.props.min;
+        const max = fields.max ?? block.props.max;
+        if (min !== undefined && max !== undefined && min > max) fault("INVALID_VALUE", "min must not exceed max.");
+        if (block.type === "slider") {
+          const value = fields.value ?? block.props.value;
+          fields.value = Math.min(max, Math.max(min, value));
+        }
+        const format = fields.format ?? block.props.format;
+        if (format === "unit" && !(fields.unit ?? block.props.unit)) fault("INVALID_VALUE", "unit format requires a unit.");
+      } else fault("INVALID_UPDATE", `Block type '${block.type}' is not supported by update_block.`);
+      const nextName = fields.name;
+      if (nextName && nextName !== block.props?.name) ensureUniqueName(nextName, block.props?.varId);
+      const props = { ...fields };
+      delete props.text; delete props.level;
+      if (Array.isArray(props.options)) props.options = JSON.stringify(props.options);
+      return { id, fields, block, nextName, props };
+    };
+    const applyUpdate = (editor: ModeloEditor, update: ReturnType<typeof prepareUpdate>) => {
+      const { id, fields, block, nextName, props } = update;
+      if (nextName && nextName !== block.props?.name) editor.replaceBlocks(editor.document, renameVariable(editor.document as any, block.props.varId, nextName) as any);
+      if ("text" in fields || "level" in fields) {
+        const content = "text" in fields ? portableToEditorBlocks([{ type: "paragraph", text: fields.text }])[0].content : undefined;
+        editor.updateBlock(id, { ...(content !== undefined ? { content } : {}), ...(fields.level !== undefined ? { props: { level: fields.level } } : {}) } as any);
+      } else if (Object.keys(props).length) editor.updateBlock(id, { props } as any);
+    };
     return {
       workspace: {
         list: () => ok({ currency: workspaceRef.current.currency, locale: workspaceRef.current.locale, notebooks: workspaceRef.current.notebooks.map(({ id, title, updatedAt }) => ({ id, title, updatedAt })), openNotebookId: openIdRef.current }),
@@ -170,10 +227,12 @@ export default function App() {
           const finalNames = { ...model.idByName, ...Object.fromEntries(portable.filter((block) => block.props?.name).map((block) => [block.props.name, block.props.varId])) };
           const warnings = unknownReferences(args.body, finalNames);
           const converted = portableToEditorBlocks(portable, finalNames);
+          const preview = previewInsert(before, converted, args.referenceBlockId, args.placement);
+          if (args.dry_run) return ok(mutationResult(before, preview, workspaceRef.current, { dry_run: true, insertedBlockIds: converted.map((block) => block.id), warnings }));
           editor.transact(() => { if (args.referenceBlockId) editor.insertBlocks(converted as any, args.referenceBlockId, args.placement ?? "after"); else if (editor.document.length === 1 && editor.document[0].type === "paragraph" && textContent(editor.document[0]) === "") editor.replaceBlocks(editor.document, converted as any); else editor.insertBlocks(converted as any, editor.document.at(-1)!, "after"); });
           return ok(mutationResult(before, editor.document as any[], workspaceRef.current, { insertedBlockIds: converted.map((block) => block.id), warnings }));
         },
-        writeSections: ({ sections }) => {
+        writeSections: ({ sections, dry_run }) => {
           const editor = currentEditor();
           const before = JSON.parse(JSON.stringify(editor.document));
           const model = projectDocument(editor.document as any);
@@ -191,11 +250,22 @@ export default function App() {
           });
           const warnings = prepared.flatMap(({ section }) => unknownReferences(section.body, idByName));
           const converted = prepared.map(({ section, portable }) => ({ section, blocks: portableToEditorBlocks(portable, idByName) }));
+          if (dry_run) {
+            let preview = before;
+            const afterAnchors = new Map<string, string>();
+            for (const { section, blocks } of converted) {
+              const reference = section.referenceBlockId && (section.placement ?? "after") === "after" ? (afterAnchors.get(section.referenceBlockId) ?? section.referenceBlockId) : section.referenceBlockId;
+              preview = previewInsert(preview, blocks, reference, section.placement);
+              if (section.referenceBlockId && (section.placement ?? "after") === "after") afterAnchors.set(section.referenceBlockId, blocks.at(-1)!.id);
+            }
+            const ids = converted.flatMap((entry) => entry.blocks.map((block) => block.id));
+            return ok(mutationResult(before, preview, workspaceRef.current, { dry_run: true, insertedBlockIds: ids, warnings }));
+          }
           editor.transact(() => {
             const afterAnchors = new Map<string, string>();
             for (const { section, blocks } of converted) {
               if (section.referenceBlockId) {
-                const anchor = section.placement === "after" ? (afterAnchors.get(section.referenceBlockId) ?? section.referenceBlockId) : section.referenceBlockId;
+                const anchor = (section.placement ?? "after") === "after" ? (afterAnchors.get(section.referenceBlockId) ?? section.referenceBlockId) : section.referenceBlockId;
                 editor.insertBlocks(blocks as any, anchor, section.placement ?? "after");
                 if ((section.placement ?? "after") === "after") afterAnchors.set(section.referenceBlockId, blocks.at(-1)!.id);
               } else if (editor.document.length === 1 && editor.document[0].type === "paragraph" && textContent(editor.document[0]) === "") editor.replaceBlocks(editor.document, blocks as any);
@@ -233,50 +303,27 @@ export default function App() {
         },
         updateBlock: (args) => {
           const editor = currentEditor();
-          const { id, ...fields } = args as any;
-          const block = editor.getBlock(id) as any;
-          if (!block) fault("NOT_FOUND", `Block '${id}' not found.`);
           const before = JSON.parse(JSON.stringify(editor.document));
-          const keys = Object.keys(fields);
-          const inputFields: Record<string, Set<string>> = {
-            number: new Set(["name", "label", "value", "format", "currency", "unit", "decimals", "min", "max", "step"]),
-            slider: new Set(["name", "label", "value", "format", "currency", "unit", "decimals", "min", "max", "step"]),
-            select: new Set(["name", "label", "value", "options"]),
-            boolean: new Set(["name", "label", "value"]),
-          };
-          if (block.type === "formula") {
-            if (keys.length !== 1 || keys[0] !== "formula") fault("INVALID_UPDATE", "Formula updates require exactly { id, formula }.");
-          } else if (["heading", "paragraph", "bulletListItem", "numberedListItem", "checkListItem"].includes(block.type)) {
-            const allowed = block.type === "heading" ? new Set(["text", "level"]) : new Set(["text"]);
-            if (!keys.length || keys.some((key) => !allowed.has(key))) fault("INVALID_UPDATE", `Fields are not valid for ${block.type}.`);
-          } else if (inputFields[block.type]) {
-            if (!keys.length || keys.some((key) => !inputFields[block.type].has(key))) fault("INVALID_UPDATE", `Fields are not valid for ${block.type}.`);
-            for (const key of ["value", "min", "max", "step", "decimals"]) if (fields[key] !== undefined && !Number.isFinite(fields[key])) fault("INVALID_VALUE", `${key} must be finite.`);
-            if (fields.step !== undefined && fields.step <= 0) fault("INVALID_VALUE", "step must be positive.");
-            if (fields.decimals !== undefined && (!Number.isInteger(fields.decimals) || fields.decimals < 0 || fields.decimals > 8)) fault("INVALID_VALUE", "decimals must be an integer from 0 to 8.");
-            const min = fields.min ?? block.props.min;
-            const max = fields.max ?? block.props.max;
-            if (min !== undefined && max !== undefined && min > max) fault("INVALID_VALUE", "min must not exceed max.");
-            if (block.type === "slider") {
-              const value = fields.value ?? block.props.value;
-              fields.value = Math.min(max, Math.max(min, value));
+          const update = prepareUpdate(editor, args);
+          editor.transact(() => applyUpdate(editor, update));
+          return ok(mutationResult(before, editor.document as any[], workspaceRef.current, { id: args.id }));
+        },
+        updateBlocks: ({ blocks }) => {
+          const editor = currentEditor();
+          const before = JSON.parse(JSON.stringify(editor.document));
+          const ids = blocks.map(({ id }) => id);
+          if (new Set(ids).size !== ids.length) fault("INVALID_UPDATE", "Each block may appear only once in update_blocks.");
+          const updates = blocks.map((args) => prepareUpdate(editor, args));
+          const renamed = new Set<string>();
+          for (const update of updates) {
+            if (update.nextName && update.nextName !== update.block.props?.name) {
+              if (renamed.has(update.nextName)) fault("DUPLICATE_VARIABLE_NAME", `Variable '${update.nextName}' already exists.`);
+              renamed.add(update.nextName);
             }
-            const format = fields.format ?? block.props.format;
-            if (format === "unit" && !(fields.unit ?? block.props.unit)) fault("INVALID_VALUE", "unit format requires a unit.");
-          } else fault("INVALID_UPDATE", `Block type '${block.type}' is not supported by update_block.`);
-          const nextName = fields.name;
-          if (nextName && nextName !== block.props?.name) ensureUniqueName(nextName, block.props?.varId);
-          const props = { ...fields };
-          delete props.text; delete props.level;
-          if (Array.isArray(props.options)) props.options = JSON.stringify(props.options);
-          editor.transact(() => {
-            if (nextName && nextName !== block.props?.name) editor.replaceBlocks(editor.document, renameVariable(editor.document as any, block.props.varId, nextName) as any);
-            if ("text" in fields || "level" in fields) {
-              const content = "text" in fields ? portableToEditorBlocks([{ type: "paragraph", text: fields.text }])[0].content : undefined;
-              editor.updateBlock(id, { ...(content !== undefined ? { content } : {}), ...(fields.level !== undefined ? { props: { level: fields.level } } : {}) } as any);
-            } else if (Object.keys(props).length) editor.updateBlock(id, { props } as any);
-          });
-          return ok(mutationResult(before, editor.document as any[], workspaceRef.current, { id }));
+          }
+          editor.transact(() => updates.forEach((update) => applyUpdate(editor, update)));
+          const { errors, changed } = mutationResult(before, editor.document as any[], workspaceRef.current);
+          return ok({ errors, changed });
         },
         removeBlocks: ({ ids }) => {
           const editor = currentEditor();

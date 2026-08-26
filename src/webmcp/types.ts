@@ -36,8 +36,9 @@ export interface NotebookWriteSectionArgs {
   formulas?: Array<{ name: string; formula: string; label?: string }>;
   referenceBlockId?: string;
   placement?: "before" | "after";
+  dry_run?: boolean;
 }
-export interface NotebookWriteSectionsArgs { sections: NotebookWriteSectionArgs[] }
+export interface NotebookWriteSectionsArgs { sections: NotebookWriteSectionArgs[]; dry_run?: boolean }
 
 type InputUpdateFields = {
   name?: string;
@@ -56,6 +57,7 @@ export type NotebookUpdateBlockArgs =
   | ({ id: string } & InputUpdateFields)
   | { id: string; formula: string }
   | { id: string; text: string; level?: 1 | 2 | 3 };
+export interface NotebookUpdateBlocksArgs { blocks: NotebookUpdateBlockArgs[] }
 
 export interface NotebookRemoveBlocksArgs { ids: string[] }
 export type NotebookVariableSelector = { name: string; varId?: never } | { name?: never; varId: string };
@@ -82,6 +84,7 @@ export interface ModeloToolsAdapter {
     writeSections: (args: NotebookWriteSectionsArgs) => MaybePromise<unknown>;
     insertBlocks: (args: NotebookInsertBlocksArgs) => MaybePromise<unknown>;
     updateBlock: (args: NotebookUpdateBlockArgs) => MaybePromise<unknown>;
+    updateBlocks: (args: NotebookUpdateBlocksArgs) => MaybePromise<unknown>;
     removeBlocks: (args: NotebookRemoveBlocksArgs) => MaybePromise<unknown>;
     removeVariable: (args: NotebookRemoveVariableArgs) => MaybePromise<unknown>;
     replaceParagraph: (args: NotebookReplaceParagraphArgs) => MaybePromise<unknown>;

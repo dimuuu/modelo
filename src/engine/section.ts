@@ -28,6 +28,7 @@ export interface WriteSectionArgs {
   formulas?: SectionFormula[];
   referenceBlockId?: string;
   placement?: "before" | "after";
+  dry_run?: boolean;
 }
 
 export function inlineContentFromText(text: string, idByName: Record<string, string>): Array<string | { type: "ref"; varId: string; label: string }> {

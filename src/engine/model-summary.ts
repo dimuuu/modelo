@@ -8,6 +8,7 @@ export interface ModelSummaryOptions {
 }
 
 export interface ModelSummaryVariable {
+  blockId: string;
   name: string;
   kind: "input" | "formula";
   value: number | null;
@@ -41,6 +42,7 @@ export function getModelSummary(
     const format = variable.kind === "input" ? formatKind(variable) : null;
     const nested = variable.kind === "input" ? nestedFormat(variable) : undefined;
     const summary: ModelSummaryVariable = {
+      blockId: variable.blockId,
       name: variable.name,
       kind: variable.kind,
       value: variable.value ?? null,

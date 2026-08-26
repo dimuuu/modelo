@@ -45,7 +45,9 @@ function inputQuantity(variable: ProjectedInput, defaults: FormatDefaults): Quan
     return math.unit(variable.value, code);
   }
   if (kind === "unit" && variable.unit) return math.unit(variable.value, variable.unit);
-  if (kind === "percent") return math.unit(variable.value, "percent");
+  // Percent inputs are display values (20 means 20%) but formulas receive a
+  // dimensionless ratio so ordinary scalar algebra works: 1 + 20% = 1.2.
+  if (kind === "percent") return variable.value / 100;
   return variable.value;
 }
 

@@ -164,10 +164,12 @@ describe("Modelo deterministic engine", () => {
       { id: "extra", type: "number", props: { varId: "extra-id", name: "extra", value: 2, format: "percent" } },
       { id: "commission", type: "formula", props: { varId: "commission-id", name: "commission", formula: "quota * rate" } },
       { id: "combined", type: "formula", props: { varId: "combined-id", name: "combined", formula: "rate + extra" } },
+      { id: "uplift", type: "formula", props: { varId: "uplift-id", name: "uplift", formula: "1 + rate" } },
     ]), { locale: "en-US" });
     expect(result.byId["rate-id"]).toMatchObject({ status: "ok", value: 8, formatted: "8%" });
     expect(result.byId["commission-id"]).toMatchObject({ status: "ok", value: 5_600, formatted: "€5,600" });
-    expect(result.byId["combined-id"]).toMatchObject({ status: "ok", value: 10, formatted: "10%" });
+    expect(result.byId["combined-id"]).toMatchObject({ status: "ok", value: 0.1, formatted: "0.1" });
+    expect(result.byId["uplift-id"]).toMatchObject({ status: "ok", value: 1.08, formatted: "1.08" });
   });
 
   it("keeps parse/runtime errors visible", () => {
