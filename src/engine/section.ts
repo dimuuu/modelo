@@ -1,4 +1,4 @@
-export type SectionInputKind = "number" | "slider" | "select";
+export type SectionInputKind = "number" | "slider" | "select" | "boolean";
 
 export interface SectionInput {
   kind: SectionInputKind;
@@ -8,6 +8,7 @@ export interface SectionInput {
   min?: number;
   max?: number;
   step?: number;
+  format?: "number" | "currency" | "percent" | "unit";
   unit?: string;
   currency?: string;
   options?: Array<{ label: string; value: number }>;
@@ -18,6 +19,7 @@ export interface SectionFormula {
   name: string;
   formula: string;
   label?: string;
+  format?: "number" | "currency" | "percent" | "unit";
   unit?: string;
   currency?: string;
   decimals?: number;
@@ -59,7 +61,7 @@ export function buildSectionBlocks(
   ].map(({ kind, value }) => {
     const varId = makeId();
     idByName[value.name] = varId;
-    const format = "currency" in value && value.currency ? "currency" : "unit" in value && value.unit ? "unit" : "number";
+    const format = value.format ?? ("currency" in value && value.currency ? "currency" : "unit" in value && value.unit ? "unit" : "number");
     return {
       id: makeId(),
       type: kind,
@@ -67,7 +69,7 @@ export function buildSectionBlocks(
         varId,
         name: value.name,
         label: value.label ?? value.name,
-        ...(kind === "formula" ? { formula: (value as SectionFormula).formula } : { value: (value as SectionInput).value }),
+        ...(kind === "formula" ? { formula: (value as SectionFormula).formula } : { value: kind === "boolean" ? ((value as SectionInput).value ? 1 : 0) : (value as SectionInput).value }),
         ...(format !== "number" ? { format } : {}),
         ...("currency" in value && value.currency ? { currency: value.currency } : {}),
         ...("unit" in value && value.unit ? { unit: value.unit } : {}),

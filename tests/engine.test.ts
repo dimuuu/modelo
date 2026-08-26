@@ -115,4 +115,17 @@ describe("Modelo deterministic engine", () => {
       { id: "bad", type: "number", props: { varId: "bad-id", name: "bad", value: 1, decimals: 9 } },
     ])).toThrow(/decimals/);
   });
+
+  it("projects boolean toggles as numeric inputs and formats Yes/No", () => {
+    const off = evaluateModel(projectDocument([
+      { id: "toggle", type: "boolean", props: { varId: "toggle-id", name: "hired", value: 0 } },
+    ])).byId["toggle-id"];
+    const on = evaluateModel(projectDocument([
+      { id: "toggle", type: "boolean", props: { varId: "toggle-id", name: "hired", value: 2 } },
+      { id: "cost", type: "formula", props: { varId: "cost-id", name: "cost", formula: "hired * 5000" } },
+    ]));
+    expect(off).toMatchObject({ kind: "input", inputType: "boolean", value: 0, formatted: "No" });
+    expect(on.byId["toggle-id"]).toMatchObject({ value: 1, formatted: "Yes" });
+    expect(on.byId["cost-id"]).toMatchObject({ status: "ok", value: 5000 });
+  });
 });

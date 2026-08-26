@@ -20,6 +20,10 @@ describe("document composition", () => {
     ]);
     expect(composition).toMatchObject({ prose: 2, variables: 4, inline_refs: 1, reads_like: "calculator" });
   });
+
+  it("counts boolean toggles as variables", () => {
+    expect(getComposition([{ id: "hire", type: "boolean", props: { varId: "hire-id", name: "hire", value: 1 } }]).variables).toBe(1);
+  });
 });
 
 describe("write_section block builder", () => {
@@ -48,5 +52,11 @@ describe("write_section block builder", () => {
       " stays literal.",
     ]);
     expect(inlineContentFromText("Keep @missing and @constructor", {})).toEqual(["Keep ", "@missing", " and ", "@constructor"]);
+  });
+
+  it("builds boolean inputs for write_section", () => {
+    let next = 0;
+    const blocks = buildSectionBlocks({ heading: "Hiring", body: "Hiring: @hired", inputs: [{ kind: "boolean", name: "hired", value: 2 }] }, {}, () => `bool-${++next}`);
+    expect(blocks[1]).toMatchObject({ type: "boolean", props: { name: "hired", value: 1 } });
   });
 });

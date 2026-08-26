@@ -70,6 +70,7 @@ export interface ProjectedVariableBase {
 export interface ProjectedInput extends ProjectedVariableBase {
   kind: "input";
   value: number;
+  inputType?: "number" | "slider" | "select" | "boolean";
 }
 
 export interface ProjectedFormula extends ProjectedVariableBase {

@@ -64,8 +64,8 @@ function NotebookEditor({ notebook, workspace, onSave, expose }: { notebook: Not
   }, [documentBlocks, workspace.currency, workspace.locale]);
 
   const slashItems = useCallback(async (query: string) => {
-    const insert = (kind: "number"|"slider"|"select"|"formula") => ({
-      title: kind[0].toUpperCase() + kind.slice(1),
+    const insert = (kind: "number"|"slider"|"select"|"boolean"|"formula") => ({
+      title: kind === "boolean" ? "Toggle" : kind[0].toUpperCase() + kind.slice(1),
       subtext: kind === "formula" ? "Computed MathJS expression" : `Named ${kind} input`,
       group: "Modelo",
       onItemClick: () => {
@@ -73,7 +73,7 @@ function NotebookEditor({ notebook, workspace, onSave, expose }: { notebook: Not
         editor.transact(() => editor.updateBlock(block, { type: kind, props: newVariableProps(kind) } as any));
       },
     });
-    const all = [...getDefaultReactSlashMenuItems(editor), insert("number"), insert("slider"), insert("select"), insert("formula")];
+    const all = [...getDefaultReactSlashMenuItems(editor), insert("number"), insert("slider"), insert("select"), insert("boolean"), insert("formula")];
     const q = query.toLowerCase();
     return all.filter((item) => item.title.toLowerCase().includes(q) || item.subtext?.toLowerCase().includes(q));
   }, [editor]);
@@ -152,13 +152,14 @@ export default function App() {
           const seen = new Set<string>();
           const portable = (blocks as any[]).map((block) => {
             const next = { ...block, id: block.id || uid() };
-            if (["number", "slider", "select", "formula"].includes(block.type)) {
+            if (["number", "slider", "select", "boolean", "formula"].includes(block.type)) {
               ensureUniqueName(block.name);
               if (seen.has(block.name)) fault("DUPLICATE_VARIABLE_NAME", `Variable '${block.name}' already exists.`);
               seen.add(block.name);
               const varId = block.varId || uid();
               idByName[block.name] = varId;
               next.varId = varId;
+              if (block.type === "boolean") next.value = block.value ? 1 : 0;
               if (block.currency && !block.format) next.format = "currency";
               else if (block.unit && !block.format) next.format = "unit";
             }
@@ -173,7 +174,7 @@ export default function App() {
         removeBlocks: ({ ids }) => { const editor = currentEditor(); const missing = ids.filter((id) => !editor.getBlock(id)); if (missing.length) fault("NOT_FOUND", "Some blocks do not exist.", { ids: missing }); editor.transact(() => editor.removeBlocks(ids)); return ok({ removed: ids }); },
         replaceParagraph: ({ id, text }) => { const editor = currentEditor(); if (!editor.getBlock(id)) fault("NOT_FOUND", `Block '${id}' not found.`); const model = projectDocument(editor.document as any); const content = portableToEditorBlocks([{ type: "paragraph", inline: inlineContentFromText(text, model.idByName) }])[0].content; editor.transact(() => editor.updateBlock(id, { type: "paragraph", content } as any)); return ok({ id }); },
         insertInlineRef: ({ blockId, variable }) => { const editor = currentEditor(); const model = projectDocument(editor.document as any); const varId = model.idByName[variable]; if (!varId) fault("NOT_FOUND", `Variable '${variable}' not found.`); const block = editor.getBlock(blockId) as any; if (!block) fault("NOT_FOUND", `Block '${blockId}' not found.`); const content = [...(block.content ?? []), { type: "variableRef", props: { varId, label: variable } }]; editor.transact(() => editor.updateBlock(blockId, { content } as any)); return ok({ blockId, varId }); },
-        setVariable: ({ name, value }) => { const editor = currentEditor(); if (!Number.isFinite(value)) fault("INVALID_VALUE", "Value must be finite."); const model = projectDocument(editor.document as any); const variable = model.byId[model.idByName[name]]; if (!variable) fault("NOT_FOUND", `Variable '${name}' not found.`); const block = editor.getBlock(variable.blockId) as any; if (!["number", "slider", "select"].includes(block.type)) fault("READ_ONLY", "Formula values are computed and cannot be set."); editor.transact(() => editor.updateBlock(block, { props: { value } })); return ok({ name, value }); },
+        setVariable: ({ name, value }) => { const editor = currentEditor(); if (!Number.isFinite(value)) fault("INVALID_VALUE", "Value must be finite."); const model = projectDocument(editor.document as any); const variable = model.byId[model.idByName[name]]; if (!variable) fault("NOT_FOUND", `Variable '${name}' not found.`); const block = editor.getBlock(variable.blockId) as any; if (!["number", "slider", "select", "boolean"].includes(block.type)) fault("READ_ONLY", "Formula values are computed and cannot be set."); const nextValue = block.type === "boolean" ? (value ? 1 : 0) : block.type === "slider" ? Math.min(block.props.max, Math.max(block.props.min, value)) : value; editor.transact(() => editor.updateBlock(block, { props: { value: nextValue } })); return ok({ name, value: nextValue }); },
       } : null,
     };
   }, [openId, updateWorkspace]);

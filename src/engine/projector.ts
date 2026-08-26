@@ -37,7 +37,7 @@ export class DuplicateVariableIdError extends ModelValidationError {
 }
 
 const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
-const inputTypes = new Set(["modelVariable", "variable", "number", "slider", "select"]);
+const inputTypes = new Set(["modelVariable", "variable", "number", "slider", "select", "boolean"]);
 const formulaTypes = new Set(["modelFormula", "formula"]);
 
 function validateIdentity(varId: unknown, name: unknown): asserts varId is string {
@@ -70,7 +70,8 @@ function visit(blocks: ModeloDocument, output: ProjectedVariable[]): void {
         blockId: block.id,
         varId: props.varId,
         name: props.name as string,
-        value: props.value,
+        value: block.type === "boolean" ? (props.value ? 1 : 0) : props.value,
+        inputType: block.type === "boolean" ? "boolean" : ["number", "slider", "select"].includes(block.type) ? block.type as "number" | "slider" | "select" : undefined,
         format: props.format,
         currency: props.currency,
         unit: props.unit,

@@ -34,7 +34,7 @@ const modelKeys = new Set(["name", "value", "label", "min", "max", "step", "unit
 
 export function portableToEditorBlocks(blocks: any[], idByName: Record<string, string> = {}): any[] {
   return blocks.map((block) => {
-    if (["number", "slider", "select", "formula"].includes(block.type)) {
+    if (["number", "slider", "select", "boolean", "formula"].includes(block.type)) {
       const props = { ...(block.props ?? {}) };
       for (const key of modelKeys) if (block[key] !== undefined && props[key] === undefined) props[key] = block[key];
       if (Array.isArray(props.options)) props.options = JSON.stringify(props.options);

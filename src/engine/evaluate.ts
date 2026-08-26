@@ -80,7 +80,7 @@ export function evaluateModel(model: ProjectedModel, defaults: FormatDefaults = 
     let result: EvaluatedVariable;
     if (variable.kind === "input") {
       result = Number.isFinite(variable.value)
-        ? { ...variable, status: "ok", formatted: formatValue(variable.value, variable, defaults) }
+        ? { ...variable, status: "ok", formatted: variable.inputType === "boolean" ? (variable.value ? "Yes" : "No") : formatValue(variable.value, variable, defaults) }
         : errorResult(variable, "Input must be a finite number");
     } else {
       const inspected = inspectFormula(variable, model);

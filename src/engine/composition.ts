@@ -9,7 +9,7 @@ export interface Composition {
 }
 
 const PROSE_TYPES = new Set(["heading", "paragraph", "bullet", "bulletListItem", "numberedListItem", "checkListItem"]);
-const VARIABLE_TYPES = new Set(["number", "slider", "select", "formula", "modelVariable", "variable", "modelFormula"]);
+const VARIABLE_TYPES = new Set(["number", "slider", "select", "boolean", "formula", "modelVariable", "variable", "modelFormula"]);
 
 function countInlineRefs(value: unknown): number {
   if (Array.isArray(value)) return value.reduce((total, item) => total + countInlineRefs(item), 0);

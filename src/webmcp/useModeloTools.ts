@@ -68,7 +68,7 @@ const optionProperty = {
   items: { type: "object", properties: { label: { type: "string" }, value: { type: "number" } }, required: ["label", "value"], additionalProperties: false },
 } as const;
 const displayProperties = {
-  label: { type: "string", minLength: 1 }, unit: { type: "string", minLength: 1 }, currency: { type: "string", minLength: 1 }, decimals: decimalsProperty,
+  label: { type: "string", minLength: 1 }, format: { type: "string", enum: ["number", "currency", "percent", "unit"] }, unit: { type: "string", minLength: 1 }, currency: { type: "string", minLength: 1 }, decimals: decimalsProperty,
 } as const;
 const inputProperties = {
   name: nameProperty, value: { type: "number" }, ...displayProperties,
@@ -85,7 +85,7 @@ const insertBlocksSchema = {
         { type: "object", properties: { id: { type: "string" }, type: { const: "heading" }, text: { type: "string" }, level: { type: "integer", enum: [1, 2, 3], default: 2 } }, required: ["type", "text"], additionalProperties: false },
         { type: "object", properties: { id: { type: "string" }, type: { const: "paragraph" }, text: { type: "string", description: "Plain text; known @name tokens become live references." } }, required: ["type", "text"], additionalProperties: false },
         { type: "object", properties: { id: { type: "string" }, type: { const: "bullet" }, text: { type: "string" } }, required: ["type", "text"], additionalProperties: false },
-        ...(["number", "slider", "select"] as const).map((type) => ({ type: "object" as const, properties: { id: { type: "string" as const }, type: { const: type }, ...inputProperties }, required: ["type", "name", "value"] as const, additionalProperties: false })),
+        ...(["number", "slider", "select", "boolean"] as const).map((type) => ({ type: "object" as const, properties: { id: { type: "string" as const }, type: { const: type }, ...inputProperties }, required: ["type", "name", "value"] as const, additionalProperties: false })),
         { type: "object", properties: { id: { type: "string" }, type: { const: "formula" }, name: nameProperty, formula: { type: "string", minLength: 1, pattern: "\\S" }, ...displayProperties }, required: ["type", "name", "formula"], additionalProperties: false },
       ] },
       description: "Typed blocks to insert in document order. Prefer write_section for complete narrative sections.",
@@ -108,7 +108,7 @@ const writeSectionSchema = {
       items: {
         type: "object",
         properties: {
-          kind: { type: "string", enum: ["number", "slider", "select"] },
+          kind: { type: "string", enum: ["number", "slider", "select", "boolean"] },
           name: { type: "string", pattern: "^[A-Za-z_][A-Za-z0-9_]*$" },
           value: { type: "number" },
           label: { type: "string", minLength: 1 },
