@@ -19,10 +19,6 @@ export interface SectionFormula {
   name: string;
   formula: string;
   label?: string;
-  format?: "number" | "currency" | "percent" | "unit";
-  unit?: string;
-  currency?: string;
-  decimals?: number;
 }
 
 export interface WriteSectionArgs {
@@ -61,7 +57,7 @@ export function buildSectionBlocks(
   ].map(({ kind, value }) => {
     const varId = makeId();
     idByName[value.name] = varId;
-    const format = value.format ?? ("currency" in value && value.currency ? "currency" : "unit" in value && value.unit ? "unit" : "number");
+    const format = kind === "formula" ? "number" : value.format ?? ("currency" in value && value.currency ? "currency" : "unit" in value && value.unit ? "unit" : "number");
     return {
       id: makeId(),
       type: kind,
@@ -70,14 +66,14 @@ export function buildSectionBlocks(
         name: value.name,
         label: value.label ?? value.name,
         ...(kind === "formula" ? { formula: (value as SectionFormula).formula } : { value: kind === "boolean" ? ((value as SectionInput).value ? 1 : 0) : (value as SectionInput).value }),
-        ...(format !== "number" ? { format } : {}),
-        ...("currency" in value && value.currency ? { currency: value.currency } : {}),
-        ...("unit" in value && value.unit ? { unit: value.unit } : {}),
+        ...(kind !== "formula" && format !== "number" ? { format } : {}),
+        ...(kind !== "formula" && "currency" in value && value.currency ? { currency: value.currency } : {}),
+        ...(kind !== "formula" && "unit" in value && value.unit ? { unit: value.unit } : {}),
         ...("min" in value && value.min !== undefined ? { min: value.min } : {}),
         ...("max" in value && value.max !== undefined ? { max: value.max } : {}),
         ...("step" in value && value.step !== undefined ? { step: value.step } : {}),
         ...("options" in value && value.options ? { options: value.options } : {}),
-        ...(value.decimals !== undefined ? { decimals: value.decimals } : {}),
+        ...(kind !== "formula" && value.decimals !== undefined ? { decimals: value.decimals } : {}),
       },
     };
   });
@@ -90,7 +86,7 @@ export function buildSectionBlocks(
 
   return [
     { id: makeId(), type: "heading", level: 2, text: args.heading },
-    ...variables,
     ...paragraphs,
+    ...variables,
   ];
 }

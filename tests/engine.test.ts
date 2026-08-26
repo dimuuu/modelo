@@ -204,4 +204,10 @@ describe("Modelo deterministic engine", () => {
     expect(on.byId["toggle-id"]).toMatchObject({ value: 1, formatted: "Yes" });
     expect(on.byId["cost-id"]).toMatchObject({ status: "ok", value: 5000 });
   });
+
+  it("projects optional numeric input bounds", () => {
+    expect(projectDocument([
+      { id: "bounded", type: "number", props: { varId: "bounded-id", name: "bounded", value: 5, min: 1, max: 10 } },
+    ]).byId["bounded-id"]).toMatchObject({ min: 1, max: 10 });
+  });
 });

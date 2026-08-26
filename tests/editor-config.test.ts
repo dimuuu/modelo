@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clampSliderValue, parseSelectOptions } from "../src/editor";
+import { clampSliderValue, modeloSchema, parseSelectOptions } from "../src/editor";
 
 describe("model block config helpers", () => {
   it("parses only finite numeric select options", () => {
@@ -11,5 +11,12 @@ describe("model block config helpers", () => {
     expect(clampSliderValue(15, 0, 10)).toBe(10);
     expect(clampSliderValue(-2, 0, 10)).toBe(0);
     expect(clampSliderValue(5, 10, 0)).toBe(5);
+  });
+
+  it("keeps number bounds optional in the editor schema", () => {
+    expect(modeloSchema.blockSchema.number.propSchema).toMatchObject({
+      min: { default: undefined, type: "number" },
+      max: { default: undefined, type: "number" },
+    });
   });
 });

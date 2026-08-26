@@ -77,6 +77,8 @@ function visit(blocks: ModeloDocument, output: ProjectedVariable[]): void {
         unit: props.unit,
         locale: props.locale,
         decimals: validateDecimals(props.decimals, props.name),
+        min: props.min,
+        max: props.max,
       } satisfies ProjectedInput);
     } else if (formulaTypes.has(block.type)) {
       validateIdentity(props?.varId, props?.name);

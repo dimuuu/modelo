@@ -3,8 +3,8 @@ import { BlockNoteView } from "@blocknote/mantine";
 import { SuggestionMenuController, getDefaultReactSlashMenuItems, useCreateBlockNote } from "@blocknote/react";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
-import { buildSectionBlocks, evaluateModel, getComposition, getModelSummary, inlineContentFromText, projectDocument, renameVariable } from "./engine";
-import { ModelProvider, modeloSchema, newVariableProps, type ModeloEditor } from "./editor";
+import { buildSectionBlocks, evaluateModel, findReferences, getComposition, getModelSummary, inlineContentFromText, projectDocument, renameVariable } from "./engine";
+import { ModelProvider, modeloSchema, newVariableProps, parseSelectOptions, type ModeloEditor } from "./editor";
 import { DEFAULT_CURRENCY, DEFAULT_LOCALE, loadWorkspace, portableToEditorBlocks, saveWorkspace, STORAGE_KEY, type Notebook, type Workspace } from "./workspace";
 import { useModeloTools, type ModeloToolsAdapter } from "./webmcp/useModeloTools";
 import "./styles.css";
@@ -31,21 +31,47 @@ function unknownReferences(text: string, idByName: Record<string, string>): stri
     .map((name) => `Unknown @${name} left as literal text.`);
 }
 
-function slimBlock(block: any) {
-  return { id: block.id, type: block.type, ...(block.props?.varId ? { props: block.props } : { text: textContent(block) }) };
+function slimBlock(block: any): any {
+  const base: Record<string, unknown> = { id: block.id, type: block.type };
+  if (["heading", "paragraph", "bulletListItem", "numberedListItem", "checkListItem"].includes(block.type)) {
+    base.text = textContent(block);
+    if (block.type === "heading") base.level = block.props?.level ?? 2;
+  } else if (["number", "slider", "select", "boolean"].includes(block.type)) {
+    const props = block.props ?? {};
+    Object.assign(base, { name: props.name, label: props.label, value: props.value, format: props.format });
+    if (props.format === "currency") base.currency = props.currency;
+    if (props.format === "unit") base.unit = props.unit;
+    if (props.decimals >= 0) base.decimals = props.decimals;
+    if (block.type === "number" || block.type === "slider") {
+      if (props.min !== undefined && props.min !== null) base.min = props.min;
+      if (props.max !== undefined && props.max !== null) base.max = props.max;
+      if (props.step !== undefined) base.step = props.step;
+    }
+    if (block.type === "select") base.options = typeof props.options === "string" ? parseSelectOptions(props.options) : props.options;
+  } else if (block.type === "formula") {
+    Object.assign(base, { name: block.props?.name, label: block.props?.label, formula: block.props?.formula });
+  } else {
+    base.text = textContent(block);
+  }
+  if (Array.isArray(block.children) && block.children.length) base.children = block.children.map(slimBlock);
+  return base;
 }
 
-function mutationResult(document: any[], insertedBlockIds: string[], workspace: Workspace, warnings: string[]) {
-  const evaluated = evaluateModel(projectDocument(document), workspace);
+function mutationResult(before: any[], after: any[], workspace: Workspace, extra: Record<string, unknown> = {}) {
+  const previous = evaluateModel(projectDocument(before), workspace);
+  const evaluated = evaluateModel(projectDocument(after), workspace);
+  const changed: Record<string, string> = Object.create(null);
+  for (const variable of evaluated.variables) {
+    const old = previous.byId[variable.varId];
+    if (!old || variable.status !== "ok" || old.status !== variable.status || old.value !== variable.value || old.formatted !== variable.formatted || old.error !== variable.error) {
+      changed[variable.name] = variable.formatted;
+    }
+  }
   return {
-    insertedBlockIds,
-    blocks: document.filter((block) => insertedBlockIds.includes(block.id)).map(slimBlock),
-    composition: getComposition(document),
-    model: {
-      values: Object.fromEntries(evaluated.variables.filter((variable) => variable.status === "ok").map((variable) => [variable.name, { value: variable.value, formatted: variable.formatted }])),
-      errors: evaluated.variables.filter((variable) => variable.status !== "ok").map((variable) => ({ name: variable.name, status: variable.status, error: variable.error })),
-    },
-    warnings,
+    composition: getComposition(after),
+    errors: evaluated.variables.filter((variable) => variable.status !== "ok").map((variable) => ({ name: variable.name, status: variable.status, error: variable.error })),
+    changed,
+    ...extra,
   };
 }
 
@@ -130,10 +156,12 @@ export default function App() {
         rename: ({ id, name }) => { updateWorkspace((w) => ({ ...w, notebooks: w.notebooks.map((n) => n.id === id ? { ...n, title: name.trim() || n.title, updatedAt: new Date().toISOString() } : n) })); return ok({ id, name }); },
       },
       notebook: openId ? {
-        getDocument: () => { const blocks = currentEditor().document as any[]; return ok({ notebook: { id: currentNotebook().id, title: currentNotebook().title }, currency: workspaceRef.current.currency, locale: workspaceRef.current.locale, blocks: blocks.map((block, i) => ({ ...slimBlock(block), previousId: blocks[i-1]?.id ?? null, nextId: blocks[i+1]?.id ?? null })), composition: getComposition(blocks as any) }); },
-        getModel: () => ok(getModelSummary(currentEditor().document as any, workspaceRef.current)),
+        getDocument: () => { const blocks = currentEditor().document as any[]; return ok({ notebook: { id: currentNotebook().id, title: currentNotebook().title }, blocks: blocks.map((block, i) => ({ ...slimBlock(block), previousId: blocks[i-1]?.id ?? null, nextId: blocks[i+1]?.id ?? null })), composition: getComposition(blocks as any) }); },
+        getModel: (args) => ok(getModelSummary(currentEditor().document as any, workspaceRef.current, args)),
+        findReferences: (args) => { try { return ok(findReferences(currentEditor().document as any, args)); } catch { return fault("NOT_FOUND", `Variable '${args.name ?? args.varId}' not found.`); } },
         writeSection: (args) => {
           const editor = currentEditor();
+          const before = JSON.parse(JSON.stringify(editor.document));
           const model = projectDocument(editor.document as any);
           const names = [...(args.inputs ?? []), ...(args.formulas ?? [])].map((item) => item.name);
           const seen = new Set<string>();
@@ -143,12 +171,45 @@ export default function App() {
           const warnings = unknownReferences(args.body, finalNames);
           const converted = portableToEditorBlocks(portable, finalNames);
           editor.transact(() => { if (args.referenceBlockId) editor.insertBlocks(converted as any, args.referenceBlockId, args.placement ?? "after"); else if (editor.document.length === 1 && editor.document[0].type === "paragraph" && textContent(editor.document[0]) === "") editor.replaceBlocks(editor.document, converted as any); else editor.insertBlocks(converted as any, editor.document.at(-1)!, "after"); });
-          return ok(mutationResult(editor.document as any[], converted.map((block) => block.id), workspaceRef.current, warnings));
+          return ok(mutationResult(before, editor.document as any[], workspaceRef.current, { insertedBlockIds: converted.map((block) => block.id), warnings }));
+        },
+        writeSections: ({ sections }) => {
+          const editor = currentEditor();
+          const before = JSON.parse(JSON.stringify(editor.document));
+          const model = projectDocument(editor.document as any);
+          const idByName = Object.assign(Object.create(null) as Record<string, string>, model.idByName);
+          const seen = new Set<string>();
+          const prepared = sections.map((section) => {
+            if (section.referenceBlockId && !editor.getBlock(section.referenceBlockId)) fault("NOT_FOUND", `Block '${section.referenceBlockId}' not found.`);
+            for (const item of [...(section.inputs ?? []), ...(section.formulas ?? [])]) {
+              if (Object.prototype.hasOwnProperty.call(idByName, item.name) || seen.has(item.name)) fault("DUPLICATE_VARIABLE_NAME", `Variable '${item.name}' already exists.`);
+              seen.add(item.name);
+            }
+            const portable = buildSectionBlocks(section, idByName, uid);
+            for (const block of portable) if (block.props?.name) idByName[block.props.name] = block.props.varId;
+            return { section, portable };
+          });
+          const warnings = prepared.flatMap(({ section }) => unknownReferences(section.body, idByName));
+          const converted = prepared.map(({ section, portable }) => ({ section, blocks: portableToEditorBlocks(portable, idByName) }));
+          editor.transact(() => {
+            const afterAnchors = new Map<string, string>();
+            for (const { section, blocks } of converted) {
+              if (section.referenceBlockId) {
+                const anchor = section.placement === "after" ? (afterAnchors.get(section.referenceBlockId) ?? section.referenceBlockId) : section.referenceBlockId;
+                editor.insertBlocks(blocks as any, anchor, section.placement ?? "after");
+                if ((section.placement ?? "after") === "after") afterAnchors.set(section.referenceBlockId, blocks.at(-1)!.id);
+              } else if (editor.document.length === 1 && editor.document[0].type === "paragraph" && textContent(editor.document[0]) === "") editor.replaceBlocks(editor.document, blocks as any);
+              else editor.insertBlocks(blocks as any, editor.document.at(-1)!, "after");
+            }
+          });
+          const ids = converted.flatMap((entry) => entry.blocks.map((block) => block.id));
+          return ok(mutationResult(before, editor.document as any[], workspaceRef.current, { insertedBlockIds: ids, warnings }));
         },
         insertBlocks: ({ blocks, referenceBlockId, placement }) => {
           const editor = currentEditor();
+          const before = JSON.parse(JSON.stringify(editor.document));
           const model = projectDocument(editor.document as any);
-          const idByName = { ...model.idByName };
+          const idByName = Object.assign(Object.create(null) as Record<string, string>, model.idByName);
           const seen = new Set<string>();
           const portable = (blocks as any[]).map((block) => {
             const next = { ...block, id: block.id || uid() };
@@ -168,13 +229,113 @@ export default function App() {
           const warnings = portable.flatMap((block) => block.type === "paragraph" && typeof block.text === "string" ? unknownReferences(block.text, idByName) : []);
           const converted = portableToEditorBlocks(portable, idByName);
           editor.transact(() => { if (referenceBlockId) editor.insertBlocks(converted as any, referenceBlockId, placement ?? "after"); else if (editor.document.length === 1 && editor.document[0].type === "paragraph" && textContent(editor.document[0]) === "") editor.replaceBlocks(editor.document, converted as any); else editor.insertBlocks(converted as any, editor.document.at(-1)!, "after"); });
-          return ok(mutationResult(editor.document as any[], converted.map((block) => block.id), workspaceRef.current, warnings));
+          return ok(mutationResult(before, editor.document as any[], workspaceRef.current, { insertedBlockIds: converted.map((block) => block.id), warnings }));
         },
-        updateBlock: ({ id, patch }) => { const editor = currentEditor(); const block = editor.getBlock(id) as any; if (!block) fault("NOT_FOUND", `Block '${id}' not found.`); const nextName = (patch.props as any)?.name; if (nextName && block.props?.varId && nextName !== block.props.name) { ensureUniqueName(nextName, block.props.varId); const renamed = renameVariable(editor.document as any, block.props.varId, nextName); editor.transact(() => editor.replaceBlocks(editor.document, renamed as any)); const rest = { ...patch, props: { ...(patch.props as any) } }; delete (rest.props as any).name; if (Object.keys(rest.props as any).length) editor.transact(() => editor.updateBlock(id, rest as any)); } else editor.transact(() => editor.updateBlock(id, patch as any)); return ok({ id }); },
-        removeBlocks: ({ ids }) => { const editor = currentEditor(); const missing = ids.filter((id) => !editor.getBlock(id)); if (missing.length) fault("NOT_FOUND", "Some blocks do not exist.", { ids: missing }); editor.transact(() => editor.removeBlocks(ids)); return ok({ removed: ids }); },
-        replaceParagraph: ({ id, text }) => { const editor = currentEditor(); if (!editor.getBlock(id)) fault("NOT_FOUND", `Block '${id}' not found.`); const model = projectDocument(editor.document as any); const content = portableToEditorBlocks([{ type: "paragraph", inline: inlineContentFromText(text, model.idByName) }])[0].content; editor.transact(() => editor.updateBlock(id, { type: "paragraph", content } as any)); return ok({ id }); },
-        insertInlineRef: ({ blockId, variable }) => { const editor = currentEditor(); const model = projectDocument(editor.document as any); const varId = model.idByName[variable]; if (!varId) fault("NOT_FOUND", `Variable '${variable}' not found.`); const block = editor.getBlock(blockId) as any; if (!block) fault("NOT_FOUND", `Block '${blockId}' not found.`); const content = [...(block.content ?? []), { type: "variableRef", props: { varId, label: variable } }]; editor.transact(() => editor.updateBlock(blockId, { content } as any)); return ok({ blockId, varId }); },
-        setVariable: ({ name, value }) => { const editor = currentEditor(); if (!Number.isFinite(value)) fault("INVALID_VALUE", "Value must be finite."); const model = projectDocument(editor.document as any); const variable = model.byId[model.idByName[name]]; if (!variable) fault("NOT_FOUND", `Variable '${name}' not found.`); const block = editor.getBlock(variable.blockId) as any; if (!["number", "slider", "select", "boolean"].includes(block.type)) fault("READ_ONLY", "Formula values are computed and cannot be set."); const nextValue = block.type === "boolean" ? (value ? 1 : 0) : block.type === "slider" ? Math.min(block.props.max, Math.max(block.props.min, value)) : value; editor.transact(() => editor.updateBlock(block, { props: { value: nextValue } })); return ok({ name, value: nextValue }); },
+        updateBlock: (args) => {
+          const editor = currentEditor();
+          const { id, ...fields } = args as any;
+          const block = editor.getBlock(id) as any;
+          if (!block) fault("NOT_FOUND", `Block '${id}' not found.`);
+          const before = JSON.parse(JSON.stringify(editor.document));
+          const keys = Object.keys(fields);
+          const inputFields: Record<string, Set<string>> = {
+            number: new Set(["name", "label", "value", "format", "currency", "unit", "decimals", "min", "max", "step"]),
+            slider: new Set(["name", "label", "value", "format", "currency", "unit", "decimals", "min", "max", "step"]),
+            select: new Set(["name", "label", "value", "options"]),
+            boolean: new Set(["name", "label", "value"]),
+          };
+          if (block.type === "formula") {
+            if (keys.length !== 1 || keys[0] !== "formula") fault("INVALID_UPDATE", "Formula updates require exactly { id, formula }.");
+          } else if (["heading", "paragraph", "bulletListItem", "numberedListItem", "checkListItem"].includes(block.type)) {
+            const allowed = block.type === "heading" ? new Set(["text", "level"]) : new Set(["text"]);
+            if (!keys.length || keys.some((key) => !allowed.has(key))) fault("INVALID_UPDATE", `Fields are not valid for ${block.type}.`);
+          } else if (inputFields[block.type]) {
+            if (!keys.length || keys.some((key) => !inputFields[block.type].has(key))) fault("INVALID_UPDATE", `Fields are not valid for ${block.type}.`);
+            for (const key of ["value", "min", "max", "step", "decimals"]) if (fields[key] !== undefined && !Number.isFinite(fields[key])) fault("INVALID_VALUE", `${key} must be finite.`);
+            if (fields.step !== undefined && fields.step <= 0) fault("INVALID_VALUE", "step must be positive.");
+            if (fields.decimals !== undefined && (!Number.isInteger(fields.decimals) || fields.decimals < 0 || fields.decimals > 8)) fault("INVALID_VALUE", "decimals must be an integer from 0 to 8.");
+            const min = fields.min ?? block.props.min;
+            const max = fields.max ?? block.props.max;
+            if (min !== undefined && max !== undefined && min > max) fault("INVALID_VALUE", "min must not exceed max.");
+            if (block.type === "slider") {
+              const value = fields.value ?? block.props.value;
+              fields.value = Math.min(max, Math.max(min, value));
+            }
+            const format = fields.format ?? block.props.format;
+            if (format === "unit" && !(fields.unit ?? block.props.unit)) fault("INVALID_VALUE", "unit format requires a unit.");
+          } else fault("INVALID_UPDATE", `Block type '${block.type}' is not supported by update_block.`);
+          const nextName = fields.name;
+          if (nextName && nextName !== block.props?.name) ensureUniqueName(nextName, block.props?.varId);
+          const props = { ...fields };
+          delete props.text; delete props.level;
+          if (Array.isArray(props.options)) props.options = JSON.stringify(props.options);
+          editor.transact(() => {
+            if (nextName && nextName !== block.props?.name) editor.replaceBlocks(editor.document, renameVariable(editor.document as any, block.props.varId, nextName) as any);
+            if ("text" in fields || "level" in fields) {
+              const content = "text" in fields ? portableToEditorBlocks([{ type: "paragraph", text: fields.text }])[0].content : undefined;
+              editor.updateBlock(id, { ...(content !== undefined ? { content } : {}), ...(fields.level !== undefined ? { props: { level: fields.level } } : {}) } as any);
+            } else if (Object.keys(props).length) editor.updateBlock(id, { props } as any);
+          });
+          return ok(mutationResult(before, editor.document as any[], workspaceRef.current, { id }));
+        },
+        removeBlocks: ({ ids }) => {
+          const editor = currentEditor();
+          const missing = ids.filter((id) => !editor.getBlock(id));
+          if (missing.length) fault("NOT_FOUND", "Some blocks do not exist.", { ids: missing });
+          const before = JSON.parse(JSON.stringify(editor.document));
+          editor.transact(() => editor.removeBlocks(ids));
+          return ok(mutationResult(before, editor.document as any[], workspaceRef.current, { removed: ids }));
+        },
+        removeVariable: (args) => {
+          const editor = currentEditor();
+          let references;
+          try { references = findReferences(editor.document as any, args); }
+          catch { return fault("NOT_FOUND", `Variable '${args.name ?? args.varId}' not found.`); }
+          const model = projectDocument(editor.document as any);
+          const variable = model.byId[references.varId];
+          if (!variable || variable.kind !== "input") fault("READ_ONLY", "Only input variables can be removed with remove_variable.");
+          if (!args.force && (references.formulas.length || references.paragraphs.length)) fault("VARIABLE_REFERENCED", `Variable '${references.name}' is still referenced.`, references);
+          const before = JSON.parse(JSON.stringify(editor.document));
+          editor.transact(() => editor.removeBlocks([variable.blockId]));
+          return ok(mutationResult(before, editor.document as any[], workspaceRef.current, {
+            removed: { id: variable.blockId, varId: variable.varId, name: variable.name },
+            affected: { formulaBlockIds: references.formulas, paragraphBlockIds: references.paragraphs },
+          }));
+        },
+        replaceParagraph: ({ id, text }) => {
+          const editor = currentEditor();
+          if (!editor.getBlock(id)) fault("NOT_FOUND", `Block '${id}' not found.`);
+          const before = JSON.parse(JSON.stringify(editor.document));
+          const model = projectDocument(editor.document as any);
+          const content = portableToEditorBlocks([{ type: "paragraph", inline: inlineContentFromText(text, model.idByName) }])[0].content;
+          editor.transact(() => editor.updateBlock(id, { type: "paragraph", content } as any));
+          return ok(mutationResult(before, editor.document as any[], workspaceRef.current, { id }));
+        },
+        insertInlineRef: ({ blockId, variable }) => {
+          const editor = currentEditor();
+          const model = projectDocument(editor.document as any);
+          const varId = model.idByName[variable];
+          if (!varId) fault("NOT_FOUND", `Variable '${variable}' not found.`);
+          const block = editor.getBlock(blockId) as any;
+          if (!block) fault("NOT_FOUND", `Block '${blockId}' not found.`);
+          const before = JSON.parse(JSON.stringify(editor.document));
+          const content = [...(block.content ?? []), { type: "variableRef", props: { varId, label: variable } }];
+          editor.transact(() => editor.updateBlock(blockId, { content } as any));
+          return ok(mutationResult(before, editor.document as any[], workspaceRef.current, { blockId, varId }));
+        },
+        setVariable: ({ name, value }) => {
+          const editor = currentEditor();
+          if (!Number.isFinite(value)) fault("INVALID_VALUE", "Value must be finite.");
+          const model = projectDocument(editor.document as any);
+          const variable = model.byId[model.idByName[name]];
+          if (!variable) fault("NOT_FOUND", `Variable '${name}' not found.`);
+          const block = editor.getBlock(variable.blockId) as any;
+          if (!["number", "slider", "select", "boolean"].includes(block.type)) fault("READ_ONLY", "Formula values are computed and cannot be set.");
+          const nextValue = block.type === "boolean" ? (value ? 1 : 0) : block.type === "slider" ? Math.min(block.props.max, Math.max(block.props.min, value)) : value;
+          const before = JSON.parse(JSON.stringify(editor.document));
+          editor.transact(() => editor.updateBlock(block, { props: { value: nextValue } }));
+          return ok(mutationResult(before, editor.document as any[], workspaceRef.current));
+        },
       } : null,
     };
   }, [openId, updateWorkspace]);

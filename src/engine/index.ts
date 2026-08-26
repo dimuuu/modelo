@@ -3,6 +3,7 @@ export * from "./evaluate";
 export * from "./format";
 export * from "./model-summary";
 export * from "./projector";
+export * from "./references";
 export * from "./rename";
 export * from "./section";
 export * from "./units";

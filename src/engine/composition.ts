@@ -35,7 +35,8 @@ export function getComposition(document: ModeloDocument): Composition {
   };
   visit(document);
 
-  const reads_like = variables > prose || (variables >= 4 && inline_refs === 0) ? "calculator" : "story";
+  const variableHeavy = variables > prose;
+  const reads_like = variableHeavy && (inline_refs === 0 || prose < 2) ? "calculator" : "story";
   return {
     prose,
     variables,

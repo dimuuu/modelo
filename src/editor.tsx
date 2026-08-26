@@ -132,8 +132,8 @@ function SelectOptions({ block, editor }: any) {
 }
 
 const NumberBlock = createReactBlockSpec(
-  { type: "number", propSchema: { ...sharedProps, step: { default: 1 } }, content: "none" },
-  { render: ({ block, editor }) => <div className="model-block"><div className="model-meta"><strong>{block.props.label}</strong><VariableName block={block} editor={editor}/></div><div className="number-row"><input aria-label={block.props.label} type="number" value={block.props.value} step={block.props.step} onChange={(e) => updateProps(editor, block, { value: Number(e.target.value) })}/><Value varId={block.props.varId} fallback={block.props.value}/></div><FormatFields block={block} editor={editor} includeStep/></div> }
+  { type: "number", propSchema: { ...sharedProps, min: { default: undefined, type: "number" }, max: { default: undefined, type: "number" }, step: { default: 1 } }, content: "none" },
+  { render: ({ block, editor }) => <div className="model-block"><div className="model-meta"><strong>{block.props.label}</strong><VariableName block={block} editor={editor}/></div><div className="number-row"><input aria-label={block.props.label} type="number" value={block.props.value} min={block.props.min} max={block.props.max} step={block.props.step} onChange={(e) => updateProps(editor, block, { value: Number(e.target.value) })}/><Value varId={block.props.varId} fallback={block.props.value}/></div><FormatFields block={block} editor={editor} includeStep/></div> }
 );
 
 const SliderBlock = createReactBlockSpec(

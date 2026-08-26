@@ -16,6 +16,8 @@ export interface VariableProps {
   unit?: string;
   locale?: string;
   decimals?: number;
+  min?: number;
+  max?: number;
 }
 
 export interface FormulaProps {
@@ -66,6 +68,8 @@ export interface ProjectedInput extends ProjectedVariableBase {
   unit?: string;
   locale?: string;
   decimals?: number;
+  min?: number;
+  max?: number;
 }
 
 export interface ProjectedFormula extends ProjectedVariableBase {

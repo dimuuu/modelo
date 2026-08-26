@@ -1,51 +1,67 @@
-import type { ModeloBlock, ModeloDocument } from "../model";
-import { evaluateModel, getFormulaDependencies } from "./evaluate";
+import type { FormatKind, ModeloDocument, NumberFormat, ProjectedInput } from "../model";
+import { evaluateModel } from "./evaluate";
 import { projectDocument } from "./projector";
+import { findReferences } from "./references";
 
-function containsInlineRef(value: unknown, varId: string): boolean {
-  if (Array.isArray(value)) return value.some((item) => containsInlineRef(item, varId));
-  if (!value || typeof value !== "object") return false;
-  const node = value as Record<string, unknown>;
-  if ((node.type === "variableRef" && (node.props as Record<string, unknown> | undefined)?.varId === varId)
-    || (node.type === "ref" && (node.varId === varId || (node.props as Record<string, unknown> | undefined)?.varId === varId))) return true;
-  return Object.values(node).some((item) => containsInlineRef(item, varId));
+export interface ModelSummaryOptions {
+  includeDependencies?: boolean;
 }
 
-function visitBlocks(blocks: ModeloDocument, visitor: (block: ModeloBlock) => void): void {
-  for (const block of blocks) {
-    visitor(block);
-    if (Array.isArray(block.children)) visitBlocks(block.children, visitor);
-  }
+export interface ModelSummaryVariable {
+  name: string;
+  kind: "input" | "formula";
+  value: number | null;
+  formatted: string;
+  error: string | null;
+  format: FormatKind | null;
+  currency?: string;
+  unit?: string;
+  usedBy?: string[];
 }
 
-/** Builds the read-only get_model projection without assuming every block has content. */
-export function getModelSummary(document: ModeloDocument, defaults?: { currency?: string; locale?: string }) {
+function formatKind(variable: ProjectedInput): FormatKind {
+  if (typeof variable.format === "string") return variable.format;
+  return variable.format?.style ?? "number";
+}
+
+function nestedFormat(variable: ProjectedInput): NumberFormat | undefined {
+  return typeof variable.format === "object" ? variable.format : undefined;
+}
+
+/** Builds the slim, read-only get_model projection. */
+export function getModelSummary(
+  document: ModeloDocument,
+  defaults: { currency?: string; locale?: string } = {},
+  options: ModelSummaryOptions = {},
+): ModelSummaryVariable[] {
   const projected = projectDocument(document);
   const evaluated = evaluateModel(projected, defaults);
-  const formulaUsers = new Map<string, string[]>();
-  for (const formula of projected.variables) {
-    if (formula.kind !== "formula") continue;
-    for (const name of getFormulaDependencies(formula, projected)) {
-      const varId = projected.idByName[name];
-      formulaUsers.set(varId, [...(formulaUsers.get(varId) ?? []), formula.blockId]);
-    }
-  }
 
   return evaluated.variables.map((variable) => {
-    const usedBy = [...(formulaUsers.get(variable.varId) ?? [])];
-    visitBlocks(document, (block) => {
-      if (containsInlineRef((block as Record<string, unknown>).content, variable.varId)
-        || containsInlineRef((block as Record<string, unknown>).inline, variable.varId)) usedBy.push(block.id);
-    });
-    return {
-      id: variable.varId,
+    const format = variable.kind === "input" ? formatKind(variable) : null;
+    const nested = variable.kind === "input" ? nestedFormat(variable) : undefined;
+    const summary: ModelSummaryVariable = {
       name: variable.name,
       kind: variable.kind,
-      value: variable.value,
+      value: variable.value ?? null,
       formatted: variable.formatted,
-      unit: variable.kind === "input" ? variable.unit || variable.currency : undefined,
       error: variable.error ?? null,
-      usedBy: [...new Set(usedBy)],
+      format,
     };
+    if (variable.kind === "input" && format === "currency") {
+      summary.currency = variable.currency
+        || (nested?.style === "currency" ? nested.currency : undefined)
+        || defaults.currency
+        || "EUR";
+    }
+    if (variable.kind === "input" && format === "unit") {
+      const unit = variable.unit || (nested?.style === "unit" ? nested.unit : undefined);
+      if (unit) summary.unit = unit;
+    }
+    if (options.includeDependencies) {
+      const references = findReferences(document, { varId: variable.varId });
+      summary.usedBy = [...references.formulas, ...references.paragraphs];
+    }
+    return summary;
   });
 }

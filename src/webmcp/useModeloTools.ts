@@ -4,13 +4,17 @@ import { CURRENCIES, UNITS } from "../engine/units";
 import type {
   ModeloToolFailure,
   ModeloToolsAdapter,
+  NotebookFindReferencesArgs,
+  NotebookGetModelArgs,
   NotebookInsertBlocksArgs,
   NotebookInsertInlineRefArgs,
   NotebookRemoveBlocksArgs,
+  NotebookRemoveVariableArgs,
   NotebookReplaceParagraphArgs,
   NotebookSetVariableArgs,
   NotebookUpdateBlockArgs,
   NotebookWriteSectionArgs,
+  NotebookWriteSectionsArgs,
   WorkspaceCreateArgs,
   WorkspaceDeleteArgs,
   WorkspaceDuplicateArgs,
@@ -21,6 +25,12 @@ import type {
 const emptySchema = {
   type: "object",
   properties: {},
+  additionalProperties: false,
+} as const;
+
+const getModelSchema = {
+  type: "object",
+  properties: { includeDependencies: { type: "boolean", description: "Include formula and paragraph block ids that use each variable." } },
   additionalProperties: false,
 } as const;
 
@@ -113,6 +123,7 @@ const writeSectionSchema = {
           name: { type: "string", pattern: "^[A-Za-z_][A-Za-z0-9_]*$" },
           value: { type: "number" },
           label: { type: "string", minLength: 1 },
+          format: { type: "string", enum: ["number", "currency", "percent", "unit"] },
           min: { type: "number" },
           max: { type: "number" },
           step: { type: "number" },
@@ -154,17 +165,55 @@ const writeSectionSchema = {
   additionalProperties: false,
 } as const;
 
-const updateBlockSchema = {
+const writeSectionsSchema = {
   type: "object",
-  properties: {
-    id: { type: "string", minLength: 1, description: "Block id to update." },
-    patch: {
-      type: "object",
-      minProperties: 1,
-      description: "Partial block fields or props to apply.",
-    },
-  },
-  required: ["id", "patch"],
+  properties: { sections: { type: "array", minItems: 1, items: writeSectionSchema } },
+  required: ["sections"],
+  additionalProperties: false,
+} as const;
+
+const updateId = { type: "string", minLength: 1, description: "Block id to update." } as const;
+const namedValueProperties = {
+  id: updateId,
+  name: inputProperties.name,
+  label: inputProperties.label,
+  value: inputProperties.value,
+} as const;
+const numericUpdateProperties = {
+  ...namedValueProperties,
+  format: inputProperties.format,
+  currency: inputProperties.currency,
+  unit: inputProperties.unit,
+  decimals: inputProperties.decimals,
+  min: inputProperties.min,
+  max: inputProperties.max,
+  step: inputProperties.step,
+} as const;
+const updateBlockSchema = {
+  anyOf: [
+    { type: "object", properties: { id: updateId, formula: { type: "string", minLength: 1, pattern: "\\S" } }, required: ["id", "formula"], additionalProperties: false },
+    { type: "object", properties: { id: updateId, text: { type: "string" }, level: { type: "integer", enum: [1, 2, 3] } }, required: ["id", "text"], additionalProperties: false },
+    { type: "object", properties: { id: updateId, level: { type: "integer", enum: [1, 2, 3] } }, required: ["id", "level"], additionalProperties: false },
+    { type: "object", properties: numericUpdateProperties, required: ["id"], minProperties: 2, additionalProperties: false },
+    { type: "object", properties: { ...namedValueProperties, options: inputProperties.options }, required: ["id"], minProperties: 2, additionalProperties: false },
+    { type: "object", properties: namedValueProperties, required: ["id"], minProperties: 2, additionalProperties: false },
+  ],
+} as const;
+
+const variableSelectorProperties = {
+  name: { type: "string", pattern: "^[A-Za-z_][A-Za-z0-9_]*$" },
+  varId: { type: "string", minLength: 1 },
+} as const;
+const variableSelectorSchema = {
+  type: "object",
+  properties: variableSelectorProperties,
+  oneOf: [{ required: ["name"] }, { required: ["varId"] }],
+  additionalProperties: false,
+} as const;
+const removeVariableSchema = {
+  type: "object",
+  properties: { ...variableSelectorProperties, force: { type: "boolean" } },
+  oneOf: [{ required: ["name"] }, { required: ["varId"] }],
   additionalProperties: false,
 } as const;
 
@@ -350,13 +399,21 @@ export function useModeloTools(adapter: ModeloToolsAdapter): ModeloToolsState {
     enabled: notebookEnabled,
     execute: () => callNotebook((notebook) => notebook.getDocument()),
   });
-  const notebookGetModel = useWebMCP({
+  const notebookGetModel = useWebMCP<NotebookGetModelArgs>({
     name: "get_model",
-    description: "Get variables, formulas, computed values, and evaluation errors from the open notebook.",
-    inputSchema: emptySchema,
+    description: "Get slim variables, formulas, computed values, and evaluation errors from the open notebook.",
+    inputSchema: getModelSchema,
     annotations: readOnly,
     enabled: notebookEnabled,
-    execute: () => callNotebook((notebook) => notebook.getModel()),
+    execute: (args) => callNotebook((notebook) => notebook.getModel(args)),
+  });
+  const notebookFindReferences = useWebMCP<NotebookFindReferencesArgs>({
+    name: "find_references",
+    description: "Find formula and paragraph block ids that reference one variable by name or stable varId.",
+    inputSchema: variableSelectorSchema,
+    annotations: readOnly,
+    enabled: notebookEnabled,
+    execute: (args) => callNotebook((notebook) => notebook.findReferences(args)),
   });
   const notebookInsertBlocks = useWebMCP<NotebookInsertBlocksArgs>({
     name: "insert_blocks",
@@ -372,6 +429,13 @@ export function useModeloTools(adapter: ModeloToolsAdapter): ModeloToolsState {
     enabled: notebookEnabled,
     execute: (args) => callNotebook((notebook) => notebook.writeSection(args)),
   });
+  const notebookWriteSections = useWebMCP<NotebookWriteSectionsArgs>({
+    name: "write_sections",
+    description: "Add multiple prose-first sections atomically in the supplied order.",
+    inputSchema: writeSectionsSchema,
+    enabled: notebookEnabled,
+    execute: (args) => callNotebook((notebook) => notebook.writeSections(args)),
+  });
   const notebookUpdateBlock = useWebMCP<NotebookUpdateBlockArgs>({
     name: "update_block",
     description: "Apply a partial update to one block in the open notebook.",
@@ -385,6 +449,13 @@ export function useModeloTools(adapter: ModeloToolsAdapter): ModeloToolsState {
     inputSchema: removeBlocksSchema,
     enabled: notebookEnabled,
     execute: (args) => callNotebook((notebook) => notebook.removeBlocks(args)),
+  });
+  const notebookRemoveVariable = useWebMCP<NotebookRemoveVariableArgs>({
+    name: "remove_variable",
+    description: "Remove an input variable. Refuses referenced variables unless force is true; never rewrites formulas or prose.",
+    inputSchema: removeVariableSchema,
+    enabled: notebookEnabled,
+    execute: (args) => callNotebook((notebook) => notebook.removeVariable(args)),
   });
   const notebookReplaceParagraph = useWebMCP<NotebookReplaceParagraphArgs>({
     name: "replace_paragraph",
@@ -417,10 +488,13 @@ export function useModeloTools(adapter: ModeloToolsAdapter): ModeloToolsState {
     workspace_rename: workspaceRename,
     notebook_get_document: notebookGetDocument,
     notebook_get_model: notebookGetModel,
+    notebook_find_references: notebookFindReferences,
     notebook_write_section: notebookWriteSection,
+    notebook_write_sections: notebookWriteSections,
     notebook_insert_blocks: notebookInsertBlocks,
     notebook_update_block: notebookUpdateBlock,
     notebook_remove_blocks: notebookRemoveBlocks,
+    notebook_remove_variable: notebookRemoveVariable,
     notebook_replace_paragraph: notebookReplaceParagraph,
     notebook_insert_inline_ref: notebookInsertInlineRef,
     notebook_set_variable: notebookSetVariable,
