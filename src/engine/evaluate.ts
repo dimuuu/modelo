@@ -1,18 +1,79 @@
-import { all, create, isSymbolNode, isUnit, type MathNode } from "mathjs";
+import { all, create, isSymbolNode, isUnit, type MathNode, type Unit } from "mathjs";
 import type {
   EvaluatedVariable,
   EvaluationResult,
   ProjectedFormula,
+  ProjectedInput,
   ProjectedModel,
   ProjectedVariable,
 } from "../model";
 import { formatValue, type FormatDefaults } from "./format";
 
 const math = create(all, { number: "number", predictable: true });
+math.createUnit("percent", { definition: "0.01", aliases: ["pct"] });
 const forbiddenSymbols = new Set(["random", "randomInt", "pickRandom"]);
 const forbiddenNodes = new Set(["AssignmentNode", "FunctionAssignmentNode", "BlockNode"]);
 
 type EvaluationState = "visiting" | "done";
+type Quantity = number | Unit;
+
+const registeredCurrencies = new Set<string>();
+
+function formatKind(variable: ProjectedInput): string | undefined {
+  return typeof variable.format === "string" ? variable.format : variable.format?.style;
+}
+
+function currencyCode(variable: ProjectedInput, defaults: FormatDefaults): string {
+  const nested = typeof variable.format === "object" && variable.format.style === "currency" ? variable.format.currency : undefined;
+  return (variable.currency || nested || defaults.currency || "EUR").toUpperCase();
+}
+
+function ensureCurrency(code: string): void {
+  if (registeredCurrencies.has(code)) return;
+  math.createUnit(code, { baseName: `money_${code}` });
+  registeredCurrencies.add(code);
+}
+
+function inputQuantity(variable: ProjectedInput, defaults: FormatDefaults): Quantity {
+  if (variable.inputType === "boolean") return variable.value;
+  const kind = formatKind(variable);
+  if (kind === "currency") {
+    const code = currencyCode(variable, defaults);
+    ensureCurrency(code);
+    return math.unit(variable.value, code);
+  }
+  if (kind === "unit" && variable.unit) return math.unit(variable.value, variable.unit);
+  if (kind === "percent") return math.unit(variable.value, "percent");
+  return variable.value;
+}
+
+function normalizeQuantity(value: Unit): Unit {
+  const units = value.units as Array<{ unit: { name: string } }>;
+  return units.length > 1 && units.some(({ unit }) => unit.name === "percent")
+    ? value.clone().simplify()
+    : value;
+}
+
+function formatQuantity(value: Unit, defaults: FormatDefaults): { value: number; formatted: string } {
+  const normalized = normalizeQuantity(value);
+  const numeric = Number(normalized.toNumeric());
+  if (!Number.isFinite(numeric)) throw new Error("Formula must return a finite quantity");
+
+  const units = normalized.units as Array<{ unit: { name: string; base?: { key?: string } }; power: number }>;
+  if (units.length === 1 && units[0].power === 1) {
+    const name = units[0].unit.name;
+    const base = units[0].unit.base?.key;
+    if (base?.startsWith("money_")) {
+      const currency = base.slice("money_".length);
+      return { value: numeric, formatted: formatValue(numeric, { style: "currency", currency, locale: defaults.locale }) };
+    }
+    if (name === "percent") {
+      return { value: numeric, formatted: formatValue(numeric / 100, "percent", defaults) };
+    }
+  }
+
+  return { value: numeric, formatted: formatValue(numeric, { style: "unit", unit: normalized.formatUnits(), locale: defaults.locale }) };
+}
 
 function errorResult(variable: ProjectedVariable, message: string): EvaluatedVariable {
   return { ...variable, status: "error", formatted: `Error: ${message}`, error: message };
@@ -67,7 +128,13 @@ export function getFormulaDependencies(variable: ProjectedFormula, model: Projec
 
 /** Evaluates a projected registry with dependency ordering independent of block order. */
 export function evaluateModel(model: ProjectedModel, defaults: FormatDefaults = {}): EvaluationResult {
+  // Register currency symbols before parsing so expressions such as `usd to EUR`
+  // recognize the conversion target as a unit rather than a missing variable.
+  for (const variable of model.variables) {
+    if (variable.kind === "input" && formatKind(variable) === "currency") ensureCurrency(currencyCode(variable, defaults));
+  }
   const byId: Record<string, EvaluatedVariable> = Object.create(null);
+  const quantities: Record<string, Quantity> = Object.create(null);
   const states: Record<string, EvaluationState | undefined> = Object.create(null);
 
   const evaluate = (variable: ProjectedVariable): EvaluatedVariable => {
@@ -79,9 +146,17 @@ export function evaluateModel(model: ProjectedModel, defaults: FormatDefaults = 
 
     let result: EvaluatedVariable;
     if (variable.kind === "input") {
-      result = Number.isFinite(variable.value)
-        ? { ...variable, status: "ok", formatted: variable.inputType === "boolean" ? (variable.value ? "Yes" : "No") : formatValue(variable.value, variable, defaults) }
-        : errorResult(variable, "Input must be a finite number");
+      if (Number.isFinite(variable.value)) {
+        try {
+          quantities[variable.varId] = inputQuantity(variable, defaults);
+          const formatted = variable.inputType === "boolean"
+            ? (variable.value ? "Yes" : "No")
+            : formatValue(formatKind(variable) === "percent" ? variable.value / 100 : variable.value, variable, defaults);
+          result = { ...variable, status: "ok", formatted };
+        } catch (error) {
+          result = errorResult(variable, error instanceof Error ? error.message : String(error));
+        }
+      } else result = errorResult(variable, "Input must be a finite number");
     } else {
       const inspected = inspectFormula(variable, model);
       if (inspected.error) {
@@ -89,14 +164,14 @@ export function evaluateModel(model: ProjectedModel, defaults: FormatDefaults = 
       } else if (inspected.missing.length > 0) {
         result = missingResult(variable, inspected.missing);
       } else {
-        const scope: Record<string, number> = {};
+        const scope: Record<string, Quantity> = {};
         const inheritedMissing: string[] = [];
         let dependencyError: string | undefined;
         for (const name of inspected.dependencies) {
           const dependency = evaluate(model.byId[model.idByName[name]]);
           if (dependency.status === "missing") inheritedMissing.push(...(dependency.missing ?? [name]));
           else if (dependency.status === "error") dependencyError = dependency.error ?? `Invalid dependency ${name}`;
-          else scope[name] = dependency.value as number;
+          else scope[name] = quantities[dependency.varId];
         }
         if (inheritedMissing.length > 0) {
           result = missingResult(variable, inheritedMissing);
@@ -106,14 +181,14 @@ export function evaluateModel(model: ProjectedModel, defaults: FormatDefaults = 
           try {
             const value = inspected.node!.compile().evaluate(scope);
             if (isUnit(value)) {
-              const numeric = Number(value.toNumeric(variable.unit || undefined));
-              result = Number.isFinite(numeric)
-                ? { ...variable, status: "ok", value: numeric, formatted: variable.unit ? formatValue(numeric, { style: "unit", unit: variable.unit, locale: variable.locale || defaults.locale, minimumFractionDigits: variable.decimals, maximumFractionDigits: variable.decimals }) : value.toString() }
-                : errorResult(variable, "Formula must return a finite quantity");
+              const rendered = formatQuantity(value, defaults);
+              quantities[variable.varId] = normalizeQuantity(value);
+              result = { ...variable, status: "ok", ...rendered };
             } else {
-              result = typeof value === "number" && Number.isFinite(value)
-                ? { ...variable, status: "ok", value, formatted: formatValue(value, variable, defaults) }
-                : errorResult(variable, "Formula must return a finite number");
+              if (typeof value === "number" && Number.isFinite(value)) {
+                quantities[variable.varId] = value;
+                result = { ...variable, status: "ok", value, formatted: formatValue(value, undefined, defaults) };
+              } else result = errorResult(variable, "Formula must return a finite number");
             }
           } catch (error) {
             result = errorResult(variable, error instanceof Error ? error.message : String(error));

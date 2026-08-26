@@ -17,12 +17,12 @@ const document: ModeloDocument = [
   {
     id: "cost-block",
     type: "modelVariable",
-    props: { varId: "cost-id", name: "cost", value: 450 },
+    props: { varId: "cost-id", name: "cost", value: 450, format: "currency", currency: "USD" },
   },
   {
     id: "profit-block",
     type: "modelFormula",
-    props: { varId: "profit-id", name: "profit", formula: "revenue - cost", format: "currency", currency: "USD" },
+    props: { varId: "profit-id", name: "profit", formula: "revenue - cost" },
   },
 ];
 
@@ -81,17 +81,53 @@ describe("Modelo deterministic engine", () => {
     expect(profit.missing).toEqual(["cost"]);
   });
 
-  it("evaluates MathJS units and exposes illegal conversions", () => {
+  it("evaluates explicit MathJS unit conversions", () => {
     const legal = evaluateModel(projectDocument([
-      { id: "distance", type: "modelFormula", props: { varId: "distance-id", name: "distance", formula: "5 cm to mm", format: "unit", unit: "mm" } },
+      { id: "distance", type: "modelFormula", props: { varId: "distance-id", name: "distance", formula: "5 cm to mm" } },
     ])).byId["distance-id"];
     expect(legal).toMatchObject({ status: "ok", value: 50, formatted: "50 mm" });
+  });
 
-    const illegal = evaluateModel(projectDocument([
-      { id: "bad-unit", type: "modelFormula", props: { varId: "bad-unit-id", name: "bad_unit", formula: "5 cm", format: "unit", unit: "kg" } },
-    ])).byId["bad-unit-id"];
-    expect(illegal.status).toBe("error");
-    expect(illegal.formatted).toContain("Error");
+  it("infers compatible currency and physical units from inputs", () => {
+    const result = evaluateModel(projectDocument([
+      { id: "eur-a", type: "number", props: { varId: "eur-a-id", name: "eur_a", value: 70_000, format: "currency", currency: "EUR" } },
+      { id: "eur-b", type: "number", props: { varId: "eur-b-id", name: "eur_b", value: 5_000, format: "currency", currency: "EUR" } },
+      { id: "km", type: "number", props: { varId: "km-id", name: "kilometres", value: 5, format: "unit", unit: "km" } },
+      { id: "m", type: "number", props: { varId: "m-id", name: "metres", value: 500, format: "unit", unit: "m" } },
+      { id: "money", type: "formula", props: { varId: "money-id", name: "money", formula: "eur_a + eur_b" } },
+      { id: "distance", type: "formula", props: { varId: "distance-id", name: "distance", formula: "kilometres + metres" } },
+    ]), { locale: "en-US" });
+    expect(result.byId["money-id"]).toMatchObject({ status: "ok", value: 75_000, formatted: "€75,000" });
+    expect(result.byId["distance-id"]).toMatchObject({ status: "ok", value: 5.5, formatted: "5.5 km" });
+  });
+
+  it("shows errors for incompatible currencies and physical units", () => {
+    const result = evaluateModel(projectDocument([
+      { id: "eur", type: "number", props: { varId: "eur-id", name: "eur", value: 70_000, format: "currency", currency: "EUR" } },
+      { id: "usd", type: "number", props: { varId: "usd-id", name: "usd", value: 70_000, format: "currency", currency: "USD" } },
+      { id: "km", type: "number", props: { varId: "km-id", name: "km", value: 5, format: "unit", unit: "km" } },
+      { id: "kg", type: "number", props: { varId: "kg-id", name: "kg", value: 2, format: "unit", unit: "kg" } },
+      { id: "currency", type: "formula", props: { varId: "currency-id", name: "currency_total", formula: "eur + usd" } },
+      { id: "physical", type: "formula", props: { varId: "physical-id", name: "physical_total", formula: "km + kg" } },
+      { id: "fx", type: "formula", props: { varId: "fx-id", name: "fx", formula: "usd to EUR" } },
+    ]));
+    expect(result.byId["currency-id"]).toMatchObject({ status: "error" });
+    expect(result.byId["currency-id"].formatted).toContain("Error");
+    expect(result.byId["physical-id"]).toMatchObject({ status: "error" });
+    expect(result.byId["fx-id"]).toMatchObject({ status: "error" });
+  });
+
+  it("keeps percentages dimensionless while preserving percent and currency displays", () => {
+    const result = evaluateModel(projectDocument([
+      { id: "quota", type: "number", props: { varId: "quota-id", name: "quota", value: 70_000, format: "currency", currency: "EUR" } },
+      { id: "rate", type: "number", props: { varId: "rate-id", name: "rate", value: 8, format: "percent" } },
+      { id: "extra", type: "number", props: { varId: "extra-id", name: "extra", value: 2, format: "percent" } },
+      { id: "commission", type: "formula", props: { varId: "commission-id", name: "commission", formula: "quota * rate" } },
+      { id: "combined", type: "formula", props: { varId: "combined-id", name: "combined", formula: "rate + extra" } },
+    ]), { locale: "en-US" });
+    expect(result.byId["rate-id"]).toMatchObject({ status: "ok", value: 8, formatted: "8%" });
+    expect(result.byId["commission-id"]).toMatchObject({ status: "ok", value: 5_600, formatted: "€5,600" });
+    expect(result.byId["combined-id"]).toMatchObject({ status: "ok", value: 10, formatted: "10%" });
   });
 
   it("keeps parse/runtime errors visible", () => {

@@ -38,4 +38,21 @@ describe("Modelo app smoke", () => {
     expect(screen.getByLabelText("Option 1 label")).toHaveProperty("value", "Basic");
     expect(screen.getByRole("switch", { name: "Hire now" }).getAttribute("aria-checked")).toBe("true");
   });
+
+  it("does not render format controls on formula blocks", async () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      version: 1,
+      currency: "EUR",
+      locale: "es-ES",
+      notebooks: [{ id: "formula", title: "Formula", updatedAt: new Date().toISOString(), blocks: [
+        { id: "result", type: "formula", varId: "result-id", name: "result", label: "Result", formula: "1 + 1", format: "currency", currency: "EUR", decimals: 2 },
+      ] }],
+    }));
+    render(<App />);
+    expect(await screen.findByLabelText("Result expression")).toBeTruthy();
+    expect(screen.queryByLabelText("Format")).toBeNull();
+    expect(screen.queryByLabelText("Currency code")).toBeNull();
+    expect(screen.queryByLabelText("Unit")).toBeNull();
+    expect(screen.queryByLabelText("Decimals")).toBeNull();
+  });
 });

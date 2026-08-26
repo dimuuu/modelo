@@ -415,10 +415,10 @@
           "varId": "valencia-rate-var",
           "name": "annual_interest_rate",
           "label": "Mortgage interest rate",
-          "value": 0.0325,
-          "min": 0.001,
-          "max": 0.12,
-          "step": 0.0005,
+          "value": 3.25,
+          "min": 0.1,
+          "max": 12,
+          "step": 0.05,
           "format": "percent"
         }
       },
@@ -495,10 +495,10 @@
           "varId": "valencia-maintenance-rate-var",
           "name": "annual_maintenance_rate",
           "label": "Annual maintenance reserve",
-          "value": 0.006,
+          "value": 0.6,
           "min": 0,
-          "max": 0.03,
-          "step": 0.001,
+          "max": 3,
+          "step": 0.1,
           "format": "percent"
         }
       },

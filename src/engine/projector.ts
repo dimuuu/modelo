@@ -89,11 +89,6 @@ function visit(blocks: ModeloDocument, output: ProjectedVariable[]): void {
         varId: props.varId,
         name: props.name as string,
         formula: props.formula,
-        format: props.format,
-        currency: props.currency,
-        unit: props.unit,
-        locale: props.locale,
-        decimals: validateDecimals(props.decimals, props.name),
       } satisfies ProjectedFormula);
     }
     if (Array.isArray(block.children)) visit(block.children as ModeloBlock[], output);

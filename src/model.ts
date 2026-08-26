@@ -22,11 +22,6 @@ export interface FormulaProps {
   varId: VariableId;
   name: string;
   formula: string;
-  format?: FormatKind | NumberFormat;
-  currency?: string;
-  unit?: string;
-  locale?: string;
-  decimals?: number;
 }
 
 export interface VariableBlock {
@@ -60,17 +55,17 @@ export interface ProjectedVariableBase {
   varId: VariableId;
   blockId: string;
   name: string;
-  format?: FormatKind | NumberFormat;
-  currency?: string;
-  unit?: string;
-  locale?: string;
-  decimals?: number;
 }
 
 export interface ProjectedInput extends ProjectedVariableBase {
   kind: "input";
   value: number;
   inputType?: "number" | "slider" | "select" | "boolean";
+  format?: FormatKind | NumberFormat;
+  currency?: string;
+  unit?: string;
+  locale?: string;
+  decimals?: number;
 }
 
 export interface ProjectedFormula extends ProjectedVariableBase {

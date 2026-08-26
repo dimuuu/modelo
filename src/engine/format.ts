@@ -1,6 +1,6 @@
-import type { FormatKind, NumberFormat, ProjectedVariable } from "../model";
+import type { FormatKind, NumberFormat, ProjectedInput } from "../model";
 
-type FormatInput = NumberFormat | FormatKind | Pick<ProjectedVariable, "format" | "currency" | "unit" | "locale" | "decimals">;
+type FormatInput = NumberFormat | FormatKind | Pick<ProjectedInput, "format" | "currency" | "unit" | "locale" | "decimals">;
 export interface FormatDefaults { currency?: string; locale?: string }
 
 function normalize(input: FormatInput | undefined, defaults: FormatDefaults): NumberFormat {

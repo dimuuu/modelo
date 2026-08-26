@@ -43,7 +43,7 @@ export function getModelSummary(document: ModeloDocument, defaults?: { currency?
       kind: variable.kind,
       value: variable.value,
       formatted: variable.formatted,
-      unit: variable.unit || variable.currency,
+      unit: variable.kind === "input" ? variable.unit || variable.currency : undefined,
       error: variable.error ?? null,
       usedBy: [...new Set(usedBy)],
     };
