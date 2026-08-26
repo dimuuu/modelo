@@ -39,11 +39,13 @@ Workspace tools remain registered everywhere:
 
 Document tools register only while a notebook is open:
 
-- `get_document`, `get_model`, `insert_blocks`, `update_block`, `remove_blocks`, `replace_paragraph`, `insert_inline_ref`, `set_variable`
+- `get_document`, `get_model`, `write_section`, `insert_blocks`, `update_block`, `remove_blocks`, `replace_paragraph`, `insert_inline_ref`, `set_variable`
 
 Tool failures are structured `{ ok: false, error: { code, message, details? } }` values without stack traces. Document mutations use the BlockNote editor API inside `editor.transact`.
 
 ### Suggested prompts against the Sales notebook
+
+To build a new model, ask ChatGPT to `write_section` rather than dump variables.
 
 1. “List the notebooks, open the AE compensation notebook, then summarize its model and any errors.”
 2. “Set `closed_arr` to 1,050,000 and tell me the new earned commission and total cash compensation.”

@@ -30,6 +30,26 @@ export interface NotebookInsertBlocksArgs {
   placement?: "before" | "after";
 }
 
+export interface NotebookWriteSectionArgs {
+  heading: string;
+  body: string;
+  inputs?: Array<{
+    kind: "number" | "slider" | "select";
+    name: string;
+    value: number;
+    label?: string;
+    min?: number;
+    max?: number;
+    step?: number;
+    unit?: string;
+    currency?: string;
+    options?: Array<{ label: string; value: number }>;
+  }>;
+  formulas?: Array<{ name: string; formula: string; label?: string }>;
+  referenceBlockId?: string;
+  placement?: "before" | "after";
+}
+
 export interface NotebookUpdateBlockArgs {
   id: string;
   patch: Record<string, unknown>;
@@ -75,6 +95,7 @@ export interface ModeloToolsAdapter {
   notebook: null | {
     getDocument: () => MaybePromise<unknown>;
     getModel: () => MaybePromise<unknown>;
+    writeSection: (args: NotebookWriteSectionArgs) => MaybePromise<unknown>;
     insertBlocks: (args: NotebookInsertBlocksArgs) => MaybePromise<unknown>;
     updateBlock: (args: NotebookUpdateBlockArgs) => MaybePromise<unknown>;
     removeBlocks: (args: NotebookRemoveBlocksArgs) => MaybePromise<unknown>;

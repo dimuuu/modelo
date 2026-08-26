@@ -9,6 +9,7 @@ import type {
   NotebookReplaceParagraphArgs,
   NotebookSetVariableArgs,
   NotebookUpdateBlockArgs,
+  NotebookWriteSectionArgs,
   WorkspaceCreateArgs,
   WorkspaceDeleteArgs,
   WorkspaceDuplicateArgs,
@@ -81,6 +82,61 @@ const insertBlocksSchema = {
     },
   },
   required: ["blocks"],
+  additionalProperties: false,
+} as const;
+
+const writeSectionSchema = {
+  type: "object",
+  properties: {
+    heading: { type: "string", minLength: 1, description: "Section title." },
+    body: { type: "string", minLength: 1, pattern: "\\S", description: "One to three short paragraphs. Newlines start paragraphs; @name inserts a live value." },
+    inputs: {
+      type: "array",
+      description: "Assumptions the reader will change.",
+      items: {
+        type: "object",
+        properties: {
+          kind: { type: "string", enum: ["number", "slider", "select"] },
+          name: { type: "string", pattern: "^[A-Za-z_][A-Za-z0-9_]*$" },
+          value: { type: "number" },
+          label: { type: "string", minLength: 1 },
+          min: { type: "number" },
+          max: { type: "number" },
+          step: { type: "number" },
+          unit: { type: "string", minLength: 1 },
+          currency: { type: "string", minLength: 1 },
+          options: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: { label: { type: "string" }, value: { type: "number" } },
+              required: ["label", "value"],
+              additionalProperties: false,
+            },
+          },
+        },
+        required: ["kind", "name", "value"],
+        additionalProperties: false,
+      },
+    },
+    formulas: {
+      type: "array",
+      description: "Named formulas whose result is reused later.",
+      items: {
+        type: "object",
+        properties: {
+          name: { type: "string", pattern: "^[A-Za-z_][A-Za-z0-9_]*$" },
+          formula: { type: "string", minLength: 1, pattern: "\\S" },
+          label: { type: "string", minLength: 1 },
+        },
+        required: ["name", "formula"],
+        additionalProperties: false,
+      },
+    },
+    referenceBlockId: { type: "string", minLength: 1, description: "Existing block id used as the insertion anchor. Omit to append." },
+    placement: { type: "string", enum: ["before", "after"], description: "Position relative to referenceBlockId; defaults to after." },
+  },
+  required: ["heading", "body"],
   additionalProperties: false,
 } as const;
 
@@ -245,7 +301,7 @@ export function useModeloTools(adapter: ModeloToolsAdapter): ModeloToolsState {
   });
   const workspaceCreate = useWebMCP<WorkspaceCreateArgs>({
     name: "create_notebook",
-    description: "Create a new empty notebook in the workspace and open it.",
+    description: "Create and open an empty notebook with narrative-first composition guidance.",
     inputSchema: createSchema,
     execute: (args) => run(() => adapter.workspace.create(args)),
   });
@@ -274,7 +330,7 @@ export function useModeloTools(adapter: ModeloToolsAdapter): ModeloToolsState {
 
   const notebookGetDocument = useWebMCP({
     name: "get_document",
-    description: "Get a slim ordered projection of blocks in the open notebook, including ids and neighbors.",
+    description: "Get ordered blocks and composition, so you can see whether the page reads like a story.",
     inputSchema: emptySchema,
     annotations: readOnly,
     enabled: notebookEnabled,
@@ -290,10 +346,17 @@ export function useModeloTools(adapter: ModeloToolsAdapter): ModeloToolsState {
   });
   const notebookInsertBlocks = useWebMCP<NotebookInsertBlocksArgs>({
     name: "insert_blocks",
-    description: "Insert one or more blocks into the open notebook, optionally relative to an existing block.",
+    description: "Low-level block insert for surgery. Prefer write_section when adding new content.",
     inputSchema: insertBlocksSchema,
     enabled: notebookEnabled,
     execute: (args) => callNotebook((notebook) => notebook.insertBlocks(args)),
+  });
+  const notebookWriteSection = useWebMCP<NotebookWriteSectionArgs>({
+    name: "write_section",
+    description: "Add a readable section: heading, short prose, and only the inputs the reader will change. Put results in the sentences with @name.",
+    inputSchema: writeSectionSchema,
+    enabled: notebookEnabled,
+    execute: (args) => callNotebook((notebook) => notebook.writeSection(args)),
   });
   const notebookUpdateBlock = useWebMCP<NotebookUpdateBlockArgs>({
     name: "update_block",
@@ -340,6 +403,7 @@ export function useModeloTools(adapter: ModeloToolsAdapter): ModeloToolsState {
     workspace_rename: workspaceRename,
     notebook_get_document: notebookGetDocument,
     notebook_get_model: notebookGetModel,
+    notebook_write_section: notebookWriteSection,
     notebook_insert_blocks: notebookInsertBlocks,
     notebook_update_block: notebookUpdateBlock,
     notebook_remove_blocks: notebookRemoveBlocks,
