@@ -6,4 +6,5 @@ export * from "./projector";
 export * from "./references";
 export * from "./rename";
 export * from "./section";
+export * from "./scenarios";
 export * from "./units";

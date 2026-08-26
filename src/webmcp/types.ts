@@ -66,6 +66,8 @@ export type NotebookRemoveVariableArgs = NotebookVariableSelector & { force?: bo
 export interface NotebookReplaceParagraphArgs { id: string; text: string }
 export interface NotebookInsertInlineRefArgs { blockId: string; variable: string; label?: string; offset?: number }
 export interface NotebookSetVariableArgs { name: string; value: number }
+export interface NotebookSaveScenarioArgs { name: string; values?: Record<string, number> }
+export interface NotebookScenarioArgs { name: string }
 
 export interface ModeloToolsAdapter {
   workspace: {
@@ -90,6 +92,10 @@ export interface ModeloToolsAdapter {
     replaceParagraph: (args: NotebookReplaceParagraphArgs) => MaybePromise<unknown>;
     insertInlineRef: (args: NotebookInsertInlineRefArgs) => MaybePromise<unknown>;
     setVariable: (args: NotebookSetVariableArgs) => MaybePromise<unknown>;
+    listScenarios: () => MaybePromise<unknown>;
+    saveScenario: (args: NotebookSaveScenarioArgs) => MaybePromise<unknown>;
+    applyScenario: (args: NotebookScenarioArgs) => MaybePromise<unknown>;
+    deleteScenario: (args: NotebookScenarioArgs) => MaybePromise<unknown>;
   };
 }
 

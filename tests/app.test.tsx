@@ -78,4 +78,23 @@ describe("Modelo app smoke", () => {
     expect(screen.queryByLabelText("Unit")).toBeNull();
     expect(screen.queryByLabelText("Decimals")).toBeNull();
   });
+
+  it("renders, applies, and marks a saved scenario chip active", async () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      version: 1,
+      currency: "EUR",
+      locale: "es-ES",
+      notebooks: [{
+        id: "scenarios", title: "Scenarios", updatedAt: new Date().toISOString(),
+        scenarios: [{ id: "best", name: "Best case", values: { "price-id": 25 } }],
+        blocks: [{ id: "price", type: "number", varId: "price-id", name: "price", label: "Price", value: 10, step: 1 }],
+      }],
+    }));
+    render(<App />);
+    const chip = await screen.findByRole("button", { name: "Best case" });
+    expect(chip.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(chip);
+    expect(await screen.findByRole("spinbutton", { name: "Price" })).toHaveProperty("value", "25");
+    expect(screen.getByRole("button", { name: "Best case" }).getAttribute("aria-pressed")).toBe("true");
+  });
 });

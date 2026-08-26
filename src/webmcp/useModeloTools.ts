@@ -11,6 +11,8 @@ import type {
   NotebookRemoveBlocksArgs,
   NotebookRemoveVariableArgs,
   NotebookReplaceParagraphArgs,
+  NotebookSaveScenarioArgs,
+  NotebookScenarioArgs,
   NotebookSetVariableArgs,
   NotebookUpdateBlockArgs,
   NotebookUpdateBlocksArgs,
@@ -284,6 +286,23 @@ const setVariableSchema = {
   additionalProperties: false,
 } as const;
 
+const scenarioNameSchema = {
+  type: "object",
+  properties: { name: { type: "string", minLength: 1, description: "Scenario name." } },
+  required: ["name"],
+  additionalProperties: false,
+} as const;
+
+const saveScenarioSchema = {
+  type: "object",
+  properties: {
+    name: { type: "string", minLength: 1, description: "Scenario name." },
+    values: { type: "object", description: "Optional values keyed by input name.", additionalProperties: { type: "number" } },
+  },
+  required: ["name"],
+  additionalProperties: false,
+} as const;
+
 const readOnly = { readOnlyHint: true } as const;
 
 function withoutStacks(value: unknown, seen = new WeakSet<object>()): unknown {
@@ -498,6 +517,35 @@ export function useModeloTools(adapter: ModeloToolsAdapter): ModeloToolsState {
     enabled: notebookEnabled,
     execute: (args) => callNotebook((notebook) => notebook.setVariable(args)),
   });
+  const notebookListScenarios = useWebMCP({
+    name: "list_scenarios",
+    description: "List saved input scenarios and the active one.",
+    inputSchema: emptySchema,
+    annotations: readOnly,
+    enabled: notebookEnabled,
+    execute: () => callNotebook((notebook) => notebook.listScenarios()),
+  });
+  const notebookSaveScenario = useWebMCP<NotebookSaveScenarioArgs>({
+    name: "save_scenario",
+    description: "Save or overwrite a named input scenario.",
+    inputSchema: saveScenarioSchema,
+    enabled: notebookEnabled,
+    execute: (args) => callNotebook((notebook) => notebook.saveScenario(args)),
+  });
+  const notebookApplyScenario = useWebMCP<NotebookScenarioArgs>({
+    name: "apply_scenario",
+    description: "Apply a named input scenario.",
+    inputSchema: scenarioNameSchema,
+    enabled: notebookEnabled,
+    execute: (args) => callNotebook((notebook) => notebook.applyScenario(args)),
+  });
+  const notebookDeleteScenario = useWebMCP<NotebookScenarioArgs>({
+    name: "delete_scenario",
+    description: "Delete a named input scenario.",
+    inputSchema: scenarioNameSchema,
+    enabled: notebookEnabled,
+    execute: (args) => callNotebook((notebook) => notebook.deleteScenario(args)),
+  });
 
   const tools: Record<string, WebMCPState> = {
     workspace_list: workspaceList,
@@ -519,6 +567,10 @@ export function useModeloTools(adapter: ModeloToolsAdapter): ModeloToolsState {
     notebook_replace_paragraph: notebookReplaceParagraph,
     notebook_insert_inline_ref: notebookInsertInlineRef,
     notebook_set_variable: notebookSetVariable,
+    notebook_list_scenarios: notebookListScenarios,
+    notebook_save_scenario: notebookSaveScenario,
+    notebook_apply_scenario: notebookApplyScenario,
+    notebook_delete_scenario: notebookDeleteScenario,
   };
   const states = Object.values(tools);
 

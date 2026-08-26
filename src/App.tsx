@@ -3,7 +3,7 @@ import { BlockNoteView } from "@blocknote/mantine";
 import { SuggestionMenuController, getDefaultReactSlashMenuItems, useCreateBlockNote } from "@blocknote/react";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
-import { buildSectionBlocks, evaluateModel, findReferences, getComposition, getModelSummary, inlineContentFromText, projectDocument, renameVariable } from "./engine";
+import { applyScenarioValues, buildSectionBlocks, evaluateModel, findReferences, getComposition, getModelSummary, inlineContentFromText, matchingScenarioName, projectDocument, removeScenario, renameVariable, snapshotInputs, upsertScenario, type Scenario } from "./engine";
 import { ModelProvider, modeloSchema, newVariableProps, parseSelectOptions, type ModeloEditor } from "./editor";
 import { DEFAULT_CURRENCY, DEFAULT_LOCALE, loadWorkspace, portableToEditorBlocks, saveWorkspace, STORAGE_KEY, type Notebook, type Workspace } from "./workspace";
 import { useModeloTools, type ModeloToolsAdapter } from "./webmcp/useModeloTools";
@@ -11,7 +11,7 @@ import "./styles.css";
 
 const uid = () => crypto.randomUUID();
 const ok = (data: unknown = {}) => ({ ok: true, data });
-const fault = (code: string, message: string, details?: unknown) => { throw { code, message, details }; };
+const fault = (code: string, message: string, details?: unknown): never => { throw { code, message, details }; };
 
 function download(filename: string, value: unknown) {
   const url = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2)], { type: "application/json" }));
@@ -207,7 +207,7 @@ export default function App() {
       workspace: {
         list: () => ok({ currency: workspaceRef.current.currency, locale: workspaceRef.current.locale, notebooks: workspaceRef.current.notebooks.map(({ id, title, updatedAt }) => ({ id, title, updatedAt })), openNotebookId: openIdRef.current }),
         open: ({ id }) => { if (!workspaceRef.current.notebooks.some((n) => n.id === id)) fault("NOT_FOUND", `Notebook '${id}' not found.`); setOpenId(id); return ok({ id }); },
-        create: ({ name }) => { const notebook = { id: uid(), title: name.trim() || "Untitled", blocks: [], updatedAt: new Date().toISOString() }; updateWorkspace((w) => ({ ...w, notebooks: [...w.notebooks, notebook] })); setOpenId(notebook.id); return ok({ ...notebook, currency: workspaceRef.current.currency, locale: workspaceRef.current.locale, composition: getComposition([]) }); },
+        create: ({ name }) => { const notebook = { id: uid(), title: name.trim() || "Untitled", blocks: [], scenarios: [], updatedAt: new Date().toISOString() }; updateWorkspace((w) => ({ ...w, notebooks: [...w.notebooks, notebook] })); setOpenId(notebook.id); return ok({ ...notebook, currency: workspaceRef.current.currency, locale: workspaceRef.current.locale, composition: getComposition([]) }); },
         duplicate: ({ id, name }) => { const source = workspaceRef.current.notebooks.find((n) => n.id === id) ?? fault("NOT_FOUND", `Notebook '${id}' not found.`); const copy = { ...JSON.parse(JSON.stringify(source)), id: uid(), title: name ?? `${source.title} copy`, updatedAt: new Date().toISOString() }; updateWorkspace((w) => ({ ...w, notebooks: [...w.notebooks, copy] })); return ok(copy); },
         delete: ({ id }) => { if (!workspaceRef.current.notebooks.some((n) => n.id === id)) fault("NOT_FOUND", `Notebook '${id}' not found.`); updateWorkspace((w) => ({ ...w, notebooks: w.notebooks.filter((n) => n.id !== id) })); if (openIdRef.current === id) setOpenId(null); return ok({ id }); },
         rename: ({ id, name }) => { updateWorkspace((w) => ({ ...w, notebooks: w.notebooks.map((n) => n.id === id ? { ...n, title: name.trim() || n.title, updatedAt: new Date().toISOString() } : n) })); return ok({ id, name }); },
@@ -383,6 +383,56 @@ export default function App() {
           editor.transact(() => editor.updateBlock(block, { props: { value: nextValue } }));
           return ok(mutationResult(before, editor.document as any[], workspaceRef.current));
         },
+        listScenarios: () => {
+          const notebook = currentNotebook();
+          const scenarios = notebook.scenarios ?? [];
+          return ok({ scenarios: scenarios.map(({ id, name }) => ({ id, name })), active: matchingScenarioName(currentEditor().document as any, scenarios) });
+        },
+        saveScenario: ({ name, values }) => {
+          const scenarioName = name.trim();
+          if (!scenarioName) fault("INVALID_NAME", "Scenario name cannot be empty.");
+          const editor = currentEditor();
+          const notebook = currentNotebook();
+          const warnings: string[] = [];
+          let savedValues: Record<string, number>;
+          if (values === undefined) savedValues = snapshotInputs(editor.document as any);
+          else {
+            savedValues = Object.create(null);
+            const model = projectDocument(editor.document as any);
+            for (const [variableName, value] of Object.entries(values)) {
+              if (!Number.isFinite(value)) fault("INVALID_VALUE", `Value for '${variableName}' must be finite.`);
+              const variable = model.byId[model.idByName[variableName]];
+              if (!variable || variable.kind !== "input") warnings.push(`Unknown input '${variableName}' skipped.`);
+              else savedValues[variable.varId] = value;
+            }
+          }
+          const existing = (notebook.scenarios ?? []).find((scenario) => scenario.name === scenarioName);
+          const scenario = { id: existing?.id ?? uid(), name: scenarioName, values: savedValues };
+          let scenarios: Scenario[];
+          try { scenarios = upsertScenario(notebook.scenarios ?? [], scenario); }
+          catch (error) { fault("SCENARIO_LIMIT", (error as Error).message); }
+          updateWorkspace((current) => ({ ...current, notebooks: current.notebooks.map((item) => item.id === notebook.id ? { ...item, scenarios, updatedAt: new Date().toISOString() } : item) }));
+          return ok({ scenario: { id: scenario.id, name: scenario.name }, warnings });
+        },
+        applyScenario: ({ name }) => {
+          const editor = currentEditor();
+          const scenario = (currentNotebook().scenarios ?? []).find((item) => item.name === name);
+          if (!scenario) return fault("NOT_FOUND", `Scenario '${name}' not found.`);
+          const before = JSON.parse(JSON.stringify(editor.document));
+          const model = projectDocument(before);
+          const inputIds = new Set(model.variables.filter((variable) => variable.kind === "input").map((variable) => variable.varId));
+          const warnings = Object.keys(scenario.values).filter((varId) => !inputIds.has(varId)).map((varId) => `Unknown input id '${varId}' skipped.`);
+          const next = applyScenarioValues(before, scenario.values);
+          editor.transact(() => editor.replaceBlocks(editor.document, next as any));
+          const { errors, changed } = mutationResult(before, editor.document as any[], workspaceRef.current);
+          return ok({ errors, changed, warnings });
+        },
+        deleteScenario: ({ name }) => {
+          const notebook = currentNotebook();
+          if (!(notebook.scenarios ?? []).some((scenario) => scenario.name === name)) fault("NOT_FOUND", `Scenario '${name}' not found.`);
+          updateWorkspace((current) => ({ ...current, notebooks: current.notebooks.map((item) => item.id === notebook.id ? { ...item, scenarios: removeScenario(item.scenarios ?? [], name), updatedAt: new Date().toISOString() } : item) }));
+          return ok({ name });
+        },
       } : null,
     };
   }, [openId, updateWorkspace]);
@@ -390,7 +440,18 @@ export default function App() {
 
   const createNotebook = () => adapter.workspace.create({ name: "Untitled notebook" });
   const deleteNotebook = (id: string) => { if (confirm("Delete this notebook?")) adapter.workspace.delete({ id }); };
-  const importWorkspace = (file: File) => file.text().then((text) => { const parsed = JSON.parse(text); if (parsed.version !== 1 || !Array.isArray(parsed.notebooks)) throw new Error("Not a Modelo workspace export"); const normalized = { ...parsed, currency: parsed.currency || DEFAULT_CURRENCY, locale: parsed.locale || DEFAULT_LOCALE }; localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized)); setWorkspace(normalized); setOpenId(normalized.notebooks[0]?.id ?? null); }).catch((error) => alert(error.message));
+  const importWorkspace = (file: File) => file.text().then((text) => { const parsed = JSON.parse(text); if (parsed.version !== 1 || !Array.isArray(parsed.notebooks)) throw new Error("Not a Modelo workspace export"); const normalized = { ...parsed, notebooks: parsed.notebooks.map((notebook: Notebook) => ({ ...notebook, scenarios: Array.isArray(notebook.scenarios) ? notebook.scenarios : [] })), currency: parsed.currency || DEFAULT_CURRENCY, locale: parsed.locale || DEFAULT_LOCALE }; localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized)); setWorkspace(normalized); setOpenId(normalized.notebooks[0]?.id ?? null); }).catch((error) => alert(error.message));
+  const activeScenario = openNotebook && editorRef.current ? matchingScenarioName(editorRef.current.document as any, openNotebook.scenarios ?? []) : null;
+  const saveCurrentScenario = () => {
+    const name = prompt("Scenario name");
+    if (name?.trim()) {
+      try { adapter.notebook?.saveScenario({ name }); }
+      catch (error) { alert((error as { message?: string }).message ?? "Could not save scenario."); }
+    }
+  };
+  const deleteSavedScenario = (name: string) => {
+    if (confirm(`Delete scenario '${name}'?`)) adapter.notebook?.deleteScenario({ name });
+  };
 
   return <div className="app">
     <aside className="sidebar">
@@ -399,6 +460,16 @@ export default function App() {
       <nav>{workspace.notebooks.map((notebook) => <div className={`notebook-row ${notebook.id === openId ? "active" : ""}`} key={notebook.id}><button className="notebook-link" onClick={() => setOpenId(notebook.id)}>{notebook.title}</button><button title="Duplicate" onClick={() => adapter.workspace.duplicate({ id: notebook.id })}>⧉</button><button title="Delete" onClick={() => deleteNotebook(notebook.id)}>×</button></div>)}</nav>
       <div className="sidebar-footer"><span className={`status ${webmcp.supported ? "on" : ""}`}>{webmcp.supported ? "WebMCP ready" : "WebMCP unavailable"}</span><button onClick={() => download("modelo-workspace.json", workspace)}>Export all</button><label className="import-label">Import<input type="file" accept="application/json" onChange={(e) => e.target.files?.[0] && importWorkspace(e.target.files[0])}/></label></div>
     </aside>
-    <main>{openNotebook ? <><header className="notebook-header"><input aria-label="Notebook title" value={openNotebook.title} onChange={(e) => adapter.workspace.rename({ id: openNotebook.id, name: e.target.value })}/><button onClick={() => download(`${openNotebook.title}.json`, openNotebook)}>Export</button></header><NotebookEditor key={openNotebook.id} notebook={openNotebook} workspace={workspace} onSave={saveOpenDocument} expose={expose}/></> : <section className="workspace-home"><p className="eyebrow">Workspace</p><h1>Notebook and model, together.</h1><p>Open a notebook from the left, or create a blank one. Your workspace stays in this browser.</p><button className="primary" onClick={createNotebook}>New notebook</button></section>}</main>
+    <main>{openNotebook ? <>
+      <header className="notebook-header"><input aria-label="Notebook title" value={openNotebook.title} onChange={(e) => adapter.workspace.rename({ id: openNotebook.id, name: e.target.value })}/><button onClick={() => download(`${openNotebook.title}.json`, openNotebook)}>Export</button></header>
+      <div className="scenario-row" aria-label="Scenarios">
+        {(openNotebook.scenarios ?? []).map((scenario) => <span className={`scenario-chip ${activeScenario === scenario.name ? "active" : ""}`} key={scenario.id}>
+          <button className="scenario-apply" aria-pressed={activeScenario === scenario.name} onClick={() => adapter.notebook?.applyScenario({ name: scenario.name })}>{scenario.name}</button>
+          <button className="scenario-delete" aria-label={`Delete scenario ${scenario.name}`} onClick={() => deleteSavedScenario(scenario.name)}>×</button>
+        </span>)}
+        <button className="scenario-save" onClick={saveCurrentScenario}>+ Save current as…</button>
+      </div>
+      <NotebookEditor key={openNotebook.id} notebook={openNotebook} workspace={workspace} onSave={saveOpenDocument} expose={expose}/>
+    </> : <section className="workspace-home"><p className="eyebrow">Workspace</p><h1>Notebook and model, together.</h1><p>Open a notebook from the left, or create a blank one. Your workspace stays in this browser.</p><button className="primary" onClick={createNotebook}>New notebook</button></section>}</main>
   </div>;
 }

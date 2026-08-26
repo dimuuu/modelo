@@ -1,7 +1,8 @@
 import seeds from "./data/seeds.json";
 import { inlineContentFromText } from "./engine/section";
+import type { Scenario } from "./engine/scenarios";
 
-export interface Notebook { id: string; title: string; description?: string; blocks: unknown[]; updatedAt: string }
+export interface Notebook { id: string; title: string; description?: string; blocks: unknown[]; updatedAt: string; scenarios?: Scenario[] }
 export interface Workspace { version: 1; notebooks: Notebook[]; currency: string; locale: string }
 export const STORAGE_KEY = "modelo.workspace.v1";
 export const DEFAULT_CURRENCY = "EUR";
@@ -11,7 +12,7 @@ const now = () => new Date().toISOString();
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
 
 export function seededWorkspace(): Workspace {
-  return { version: 1, currency: DEFAULT_CURRENCY, locale: DEFAULT_LOCALE, notebooks: clone(seeds).map((seed) => ({ ...seed, updatedAt: now() })) };
+  return { version: 1, currency: DEFAULT_CURRENCY, locale: DEFAULT_LOCALE, notebooks: clone(seeds).map((seed) => ({ ...seed, scenarios: [], updatedAt: now() })) };
 }
 
 export function loadWorkspace(storage: Pick<Storage, "getItem"> = localStorage): Workspace {
@@ -20,7 +21,7 @@ export function loadWorkspace(storage: Pick<Storage, "getItem"> = localStorage):
   try {
     const parsed = JSON.parse(saved) as Partial<Workspace>;
     if (parsed.version === 1 && Array.isArray(parsed.notebooks)) {
-      return { ...parsed, version: 1, notebooks: parsed.notebooks, currency: parsed.currency || DEFAULT_CURRENCY, locale: parsed.locale || DEFAULT_LOCALE };
+      return { ...parsed, version: 1, notebooks: parsed.notebooks.map((notebook) => ({ ...notebook, scenarios: Array.isArray(notebook.scenarios) ? notebook.scenarios : [] })), currency: parsed.currency || DEFAULT_CURRENCY, locale: parsed.locale || DEFAULT_LOCALE };
     }
   } catch { /* fall through to a recoverable fresh workspace */ }
   return seededWorkspace();
