@@ -3,6 +3,7 @@ import { BlockNoteSchema, defaultBlockSpecs, defaultInlineContentSpecs } from "@
 import { createReactBlockSpec, createReactInlineContentSpec } from "@blocknote/react";
 import type { EvaluationResult } from "./model";
 import { renameVariable } from "./engine/rename";
+import { CURRENCIES, UNIT_GROUPS, UNITS } from "./engine/units";
 
 const ModelContext = createContext<EvaluationResult | null>(null);
 export const ModelProvider = ModelContext.Provider;
@@ -71,13 +72,21 @@ function LabelField({ block, editor }: any) {
 
 function FormatFields({ block, editor, includeStep = false }: any) {
   const set = (props: Record<string, unknown>) => updateProps(editor, block, props);
+  const unknownCurrency = block.props.currency && !CURRENCIES.includes(block.props.currency as typeof CURRENCIES[number]);
+  const unknownUnit = block.props.unit && !UNITS.includes(block.props.unit);
   return <div className="config-row">
     <LabelField block={block} editor={editor}/>
     <label>Format<select aria-label="Format" value={block.props.format} onChange={(event) => set({ format: event.currentTarget.value })}>
       <option value="number">Number</option><option value="currency">Currency</option><option value="percent">Percent</option><option value="unit">Unit</option>
     </select></label>
-    {block.props.format === "currency" && <label>Currency<input aria-label="Currency code" value={block.props.currency} maxLength={3} onChange={(event) => set({ currency: event.currentTarget.value.toUpperCase() })}/></label>}
-    {block.props.format === "unit" && <label>Unit<input aria-label="Unit" value={block.props.unit} onChange={(event) => set({ unit: event.currentTarget.value })}/></label>}
+    {block.props.format === "currency" && <label>Currency<select aria-label="Currency code" value={block.props.currency} onChange={(event) => set({ currency: event.currentTarget.value })}>
+      {unknownCurrency && <option value={block.props.currency}>{block.props.currency}</option>}
+      {CURRENCIES.map((currency) => <option key={currency} value={currency}>{currency}</option>)}
+    </select></label>}
+    {block.props.format === "unit" && <label>Unit<select aria-label="Unit" value={block.props.unit} onChange={(event) => set({ unit: event.currentTarget.value })}>
+      {unknownUnit && <option value={block.props.unit}>{block.props.unit}</option>}
+      {UNIT_GROUPS.map((group) => <optgroup key={group.label} label={group.label}>{group.units.map((unit) => <option key={unit} value={unit}>{unit}</option>)}</optgroup>)}
+    </select></label>}
     <label>Decimals<input aria-label="Decimals" type="number" min="0" max="8" placeholder="Auto" value={block.props.decimals < 0 ? "" : block.props.decimals} onChange={(event) => {
       const raw = event.currentTarget.value;
       set({ decimals: raw === "" ? -1 : Math.max(0, Math.min(8, Math.round(Number(raw)))) });

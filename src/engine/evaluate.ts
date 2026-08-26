@@ -11,11 +11,13 @@ import { formatValue, type FormatDefaults } from "./format";
 
 const math = create(all, { number: "number", predictable: true });
 math.createUnit("percent", { definition: "0.01", aliases: ["pct"] });
+math.createUnit("ha", { definition: "10000 m2" });
 const forbiddenSymbols = new Set(["random", "randomInt", "pickRandom"]);
 const forbiddenNodes = new Set(["AssignmentNode", "FunctionAssignmentNode", "BlockNode"]);
 
 type EvaluationState = "visiting" | "done";
 type Quantity = number | Unit;
+type UnitPart = { unit: { name: string; base?: { key?: string } }; power: number };
 
 const registeredCurrencies = new Set<string>();
 
@@ -47,19 +49,38 @@ function inputQuantity(variable: ProjectedInput, defaults: FormatDefaults): Quan
   return variable.value;
 }
 
-function normalizeQuantity(value: Unit): Unit {
-  const units = value.units as Array<{ unit: { name: string } }>;
-  return units.length > 1 && units.some(({ unit }) => unit.name === "percent")
-    ? value.clone().simplify()
-    : value;
+function normalizeQuantity(value: Unit): Quantity {
+  const units = value.units as UnitPart[];
+  const moneyPowers = new Map<string, number>();
+  for (const { unit, power } of units) {
+    const base = unit.base?.key;
+    if (base?.startsWith("money_")) moneyPowers.set(base, (moneyPowers.get(base) ?? 0) + power);
+  }
+  const activeMoney = [...moneyPowers.entries()].filter(([, power]) => Math.abs(power) > 1e-12);
+  if (moneyPowers.size > 1) throw new Error("Currency arithmetic requires matching currencies");
+  if (activeMoney.some(([, power]) => Math.abs(power - 1) > 1e-12)) {
+    throw new Error("Currency multiplication is not supported");
+  }
+
+  const dimensions = (value as Unit & { dimensions?: number[] }).dimensions ?? [];
+  const shouldSimplify = units.length > 1 && (
+    units.some(({ unit }) => unit.name === "percent")
+    || dimensions.every((power) => Math.abs(power) < 1e-12)
+  );
+  const normalized = shouldSimplify ? value.clone().simplify() : value;
+  if ((normalized.units as UnitPart[]).length === 0) {
+    const numeric = Number(normalized.toNumeric());
+    if (!Number.isFinite(numeric)) throw new Error("Formula must return a finite number");
+    return numeric;
+  }
+  return normalized;
 }
 
 function formatQuantity(value: Unit, defaults: FormatDefaults): { value: number; formatted: string } {
-  const normalized = normalizeQuantity(value);
-  const numeric = Number(normalized.toNumeric());
+  const numeric = Number(value.toNumeric());
   if (!Number.isFinite(numeric)) throw new Error("Formula must return a finite quantity");
 
-  const units = normalized.units as Array<{ unit: { name: string; base?: { key?: string } }; power: number }>;
+  const units = value.units as UnitPart[];
   if (units.length === 1 && units[0].power === 1) {
     const name = units[0].unit.name;
     const base = units[0].unit.base?.key;
@@ -72,7 +93,7 @@ function formatQuantity(value: Unit, defaults: FormatDefaults): { value: number;
     }
   }
 
-  return { value: numeric, formatted: formatValue(numeric, { style: "unit", unit: normalized.formatUnits(), locale: defaults.locale }) };
+  return { value: numeric, formatted: formatValue(numeric, { style: "unit", unit: value.formatUnits(), locale: defaults.locale }) };
 }
 
 function errorResult(variable: ProjectedVariable, message: string): EvaluatedVariable {
@@ -181,9 +202,15 @@ export function evaluateModel(model: ProjectedModel, defaults: FormatDefaults = 
           try {
             const value = inspected.node!.compile().evaluate(scope);
             if (isUnit(value)) {
-              const rendered = formatQuantity(value, defaults);
-              quantities[variable.varId] = normalizeQuantity(value);
-              result = { ...variable, status: "ok", ...rendered };
+              const cancelledCurrency = (value.units as UnitPart[]).some(({ unit }) => unit.base?.key?.startsWith("money_"));
+              const normalized = normalizeQuantity(value);
+              quantities[variable.varId] = normalized;
+              if (isUnit(normalized)) {
+                result = { ...variable, status: "ok", ...formatQuantity(normalized, defaults) };
+              } else {
+                const format = cancelledCurrency ? { style: "number" as const, maximumFractionDigits: 2 } : undefined;
+                result = { ...variable, status: "ok", value: normalized, formatted: formatValue(normalized, format, defaults) };
+              }
             } else {
               if (typeof value === "number" && Number.isFinite(value)) {
                 quantities[variable.varId] = value;

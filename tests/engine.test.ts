@@ -86,6 +86,12 @@ describe("Modelo deterministic engine", () => {
       { id: "distance", type: "modelFormula", props: { varId: "distance-id", name: "distance", formula: "5 cm to mm" } },
     ])).byId["distance-id"];
     expect(legal).toMatchObject({ status: "ok", value: 50, formatted: "50 mm" });
+
+    const hectares = evaluateModel(projectDocument([
+      { id: "area", type: "number", props: { varId: "area-id", name: "area", value: 2, format: "unit", unit: "ha" } },
+      { id: "converted", type: "formula", props: { varId: "converted-id", name: "converted", formula: "area to m2" } },
+    ])).byId["converted-id"];
+    expect(hectares).toMatchObject({ status: "ok", value: 20_000, formatted: "20.000 m2" });
   });
 
   it("infers compatible currency and physical units from inputs", () => {
@@ -99,6 +105,40 @@ describe("Modelo deterministic engine", () => {
     ]), { locale: "en-US" });
     expect(result.byId["money-id"]).toMatchObject({ status: "ok", value: 75_000, formatted: "€75,000" });
     expect(result.byId["distance-id"]).toMatchObject({ status: "ok", value: 5.5, formatted: "5.5 km" });
+  });
+
+  it("cancels matching units in division and preserves scalar currency operations", () => {
+    const result = evaluateModel(projectDocument([
+      { id: "revenue", type: "number", props: { varId: "revenue-id", name: "revenue", value: 100, format: "currency", currency: "EUR" } },
+      { id: "cost", type: "number", props: { varId: "cost-id", name: "cost", value: 55, format: "currency", currency: "EUR" } },
+      { id: "distance-a", type: "number", props: { varId: "distance-a-id", name: "distance_a", value: 5, format: "unit", unit: "km" } },
+      { id: "distance-b", type: "number", props: { varId: "distance-b-id", name: "distance_b", value: 2, format: "unit", unit: "km" } },
+      { id: "margin", type: "formula", props: { varId: "margin-id", name: "margin", formula: "revenue / cost" } },
+      { id: "pace", type: "formula", props: { varId: "pace-id", name: "pace", formula: "distance_a / distance_b" } },
+      { id: "half", type: "formula", props: { varId: "half-id", name: "half", formula: "revenue / 2" } },
+      { id: "double", type: "formula", props: { varId: "double-id", name: "double", formula: "revenue * 2" } },
+    ]), { locale: "en-US" });
+
+    expect(result.byId["margin-id"]).toMatchObject({ status: "ok", value: 100 / 55, formatted: "1.82" });
+    expect(result.byId["pace-id"]).toMatchObject({ status: "ok", value: 2.5, formatted: "2.5" });
+    expect(result.byId["half-id"]).toMatchObject({ status: "ok", value: 50, formatted: "€50" });
+    expect(result.byId["double-id"]).toMatchObject({ status: "ok", value: 200, formatted: "€200" });
+  });
+
+  it("rejects squared and cross-currency money while preserving money per time", () => {
+    const result = evaluateModel(projectDocument([
+      { id: "eur", type: "number", props: { varId: "eur-id", name: "eur", value: 100, format: "currency", currency: "EUR" } },
+      { id: "usd", type: "number", props: { varId: "usd-id", name: "usd", value: 50, format: "currency", currency: "USD" } },
+      { id: "months", type: "number", props: { varId: "months-id", name: "months", value: 2, format: "unit", unit: "month" } },
+      { id: "squared", type: "formula", props: { varId: "squared-id", name: "squared", formula: "eur * eur" } },
+      { id: "cross", type: "formula", props: { varId: "cross-id", name: "cross", formula: "eur / usd" } },
+      { id: "monthly", type: "formula", props: { varId: "monthly-id", name: "monthly", formula: "eur / months" } },
+    ]), { locale: "en-US" });
+
+    expect(result.byId["squared-id"]).toMatchObject({ status: "error" });
+    expect(result.byId["cross-id"]).toMatchObject({ status: "error" });
+    expect(result.byId["monthly-id"]).toMatchObject({ status: "ok", value: 50 });
+    expect(result.byId["monthly-id"].formatted).toContain("EUR / month");
   });
 
   it("shows errors for incompatible currencies and physical units", () => {

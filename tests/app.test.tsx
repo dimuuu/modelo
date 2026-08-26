@@ -39,6 +39,29 @@ describe("Modelo app smoke", () => {
     expect(screen.getByRole("switch", { name: "Hire now" }).getAttribute("aria-checked")).toBe("true");
   });
 
+  it("uses curated currency and grouped unit selects while preserving unknown values", async () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      version: 1,
+      currency: "EUR",
+      locale: "en-US",
+      notebooks: [{ id: "formats", title: "Formats", updatedAt: new Date().toISOString(), blocks: [
+        { id: "currency", type: "number", varId: "currency-id", name: "currency", label: "Currency", value: 12, format: "currency", currency: "NOK", step: 1 },
+        { id: "unit", type: "number", varId: "unit-id", name: "unit", label: "Unit", value: 5, format: "unit", unit: "km", step: 1 },
+      ] }],
+    }));
+    render(<App />);
+
+    const currency = await screen.findByLabelText("Currency code");
+    expect(currency.tagName).toBe("SELECT");
+    expect(currency).toHaveProperty("value", "NOK");
+    expect(Array.from((currency as HTMLSelectElement).options, (option) => option.value)).toEqual(expect.arrayContaining(["EUR", "USD", "GBP", "UAH", "PLN", "CHF", "CAD", "AUD", "JPY", "NOK"]));
+
+    const unit = screen.getAllByLabelText("Unit").find((element) => element.tagName === "SELECT") as HTMLSelectElement;
+    expect(unit.tagName).toBe("SELECT");
+    expect(unit.value).toBe("km");
+    expect(Array.from(unit.querySelectorAll("optgroup"), (group) => group.label)).toEqual(["Length", "Mass", "Time", "Area", "Volume"]);
+  });
+
   it("does not render format controls on formula blocks", async () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       version: 1,

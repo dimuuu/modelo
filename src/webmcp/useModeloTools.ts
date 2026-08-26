@@ -1,4 +1,5 @@
 import { useWebMCP, type WebMCPState } from "use-webmcp-tool";
+import { CURRENCIES, UNITS } from "../engine/units";
 
 import type {
   ModeloToolFailure,
@@ -68,7 +69,7 @@ const optionProperty = {
   items: { type: "object", properties: { label: { type: "string" }, value: { type: "number" } }, required: ["label", "value"], additionalProperties: false },
 } as const;
 const displayProperties = {
-  label: { type: "string", minLength: 1 }, format: { type: "string", enum: ["number", "currency", "percent", "unit"] }, unit: { type: "string", minLength: 1 }, currency: { type: "string", minLength: 1 }, decimals: decimalsProperty,
+  label: { type: "string", minLength: 1 }, format: { type: "string", enum: ["number", "currency", "percent", "unit"] }, unit: { type: "string", enum: UNITS }, currency: { type: "string", enum: CURRENCIES }, decimals: decimalsProperty,
 } as const;
 const inputProperties = {
   name: nameProperty, value: { type: "number" }, ...displayProperties,
@@ -115,8 +116,8 @@ const writeSectionSchema = {
           min: { type: "number" },
           max: { type: "number" },
           step: { type: "number" },
-          unit: { type: "string", minLength: 1 },
-          currency: { type: "string", minLength: 1 },
+          unit: { type: "string", enum: UNITS },
+          currency: { type: "string", enum: CURRENCIES },
           decimals: decimalsProperty,
           options: {
             type: "array",
