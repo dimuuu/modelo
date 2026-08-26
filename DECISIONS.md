@@ -13,6 +13,8 @@
 
 - Variable names are MathJS-safe identifiers (`letters/_`, then `letters/digits/_`) and case-sensitive.
 - Currency is formatting only; there is no live FX. Seed models use EUR.
+- Workspace display defaults are EUR and `es-ES`; older v1 storage receives those defaults without a storage-key migration.
+- Number, slider, and formula blocks may set 0–8 fixed decimals. Without it, currency shows 0 decimals for integers and 2 for non-integers.
 - Select option values are numeric; labels carry scenario meaning.
 - Deleting the final block is refused by BlockNote; deleting variables otherwise leaves formula errors and `missing` inline chips visible.
 - Multi-tab live synchronization, auth, sharing, locks, dark mode, AI chat, and a backend are intentionally out of scope.

@@ -49,6 +49,14 @@ function validateIdentity(varId: unknown, name: unknown): asserts varId is strin
   }
 }
 
+function validateDecimals(decimals: unknown, name: unknown): number | undefined {
+  if (decimals === undefined || decimals === -1) return undefined;
+  if (!Number.isInteger(decimals) || (decimals as number) < 0 || (decimals as number) > 8) {
+    throw new ModelValidationError(`Invalid decimals for ${String(name)}: expected an integer from 0 to 8`);
+  }
+  return decimals as number;
+}
+
 function visit(blocks: ModeloDocument, output: ProjectedVariable[]): void {
   for (const block of blocks) {
     const props = block.props as Partial<VariableProps & FormulaProps> | undefined;
@@ -67,6 +75,7 @@ function visit(blocks: ModeloDocument, output: ProjectedVariable[]): void {
         currency: props.currency,
         unit: props.unit,
         locale: props.locale,
+        decimals: validateDecimals(props.decimals, props.name),
       } satisfies ProjectedInput);
     } else if (formulaTypes.has(block.type)) {
       validateIdentity(props?.varId, props?.name);
@@ -83,6 +92,7 @@ function visit(blocks: ModeloDocument, output: ProjectedVariable[]): void {
         currency: props.currency,
         unit: props.unit,
         locale: props.locale,
+        decimals: validateDecimals(props.decimals, props.name),
       } satisfies ProjectedFormula);
     }
     if (Array.isArray(block.children)) visit(block.children as ModeloBlock[], output);

@@ -15,6 +15,7 @@ export interface VariableProps {
   currency?: string;
   unit?: string;
   locale?: string;
+  decimals?: number;
 }
 
 export interface FormulaProps {
@@ -25,6 +26,7 @@ export interface FormulaProps {
   currency?: string;
   unit?: string;
   locale?: string;
+  decimals?: number;
 }
 
 export interface VariableBlock {
@@ -62,6 +64,7 @@ export interface ProjectedVariableBase {
   currency?: string;
   unit?: string;
   locale?: string;
+  decimals?: number;
 }
 
 export interface ProjectedInput extends ProjectedVariableBase {

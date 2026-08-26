@@ -37,7 +37,7 @@ describe("Modelo deterministic engine", () => {
 
     const result = evaluateModel(projected);
     expect(result.byId["profit-id"]).toMatchObject({ status: "ok", value: 750 });
-    expect(result.byId["profit-id"].formatted).toBe("$750.00");
+    expect(result.byId["profit-id"].formatted).toBe("750 US$");
   });
 
   it("evaluates forward formula references deterministically", () => {
@@ -49,8 +49,10 @@ describe("Modelo deterministic engine", () => {
   });
 
   it("formats currencies and units", () => {
-    expect(formatValue(1234.5, { style: "currency", currency: "USD" })).toBe("$1,234.50");
-    expect(formatValue(12.5, { style: "unit", unit: "kg" })).toBe("12.5 kg");
+    expect(formatValue(1234.5, { style: "currency", currency: "USD" }, { locale: "en-US" })).toBe("$1,234.50");
+    expect(formatValue(12.5, { style: "unit", unit: "kg" }, { locale: "en-US" })).toBe("12.5 kg");
+    expect(formatValue(19.298, { format: "currency", decimals: 0 }, { currency: "EUR", locale: "es-ES" })).toBe("19 €");
+    expect(formatValue(19.298, { format: "currency", decimals: 2 }, { currency: "EUR", locale: "es-ES" })).toBe("19,30 €");
   });
 
   it("renames by stable varId and safely rewrites formula identifiers", () => {
@@ -106,5 +108,11 @@ describe("Modelo deterministic engine", () => {
       { id: "two", type: "modelVariable", props: { varId: "two-id", name: "same", value: 2 } },
     ])).toThrow(DuplicateVariableNameError);
     expect(() => renameVariable(document, "cost-id", "revenue")).toThrow(DuplicateVariableNameError);
+  });
+
+  it("rejects decimals outside the 0-8 integer range", () => {
+    expect(() => projectDocument([
+      { id: "bad", type: "number", props: { varId: "bad-id", name: "bad", value: 1, decimals: 9 } },
+    ])).toThrow(/decimals/);
   });
 });

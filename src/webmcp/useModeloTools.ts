@@ -61,25 +61,37 @@ const renameSchema = {
   additionalProperties: false,
 } as const;
 
+const nameProperty = { type: "string", pattern: "^[A-Za-z_][A-Za-z0-9_]*$", description: "Unique MathJS-safe variable name." } as const;
+const decimalsProperty = { type: "integer", minimum: 0, maximum: 8, description: "Fixed display decimals (0-8). If omitted, currency uses 0 for integers and 2 otherwise." } as const;
+const optionProperty = {
+  type: "array",
+  items: { type: "object", properties: { label: { type: "string" }, value: { type: "number" } }, required: ["label", "value"], additionalProperties: false },
+} as const;
+const displayProperties = {
+  label: { type: "string", minLength: 1 }, unit: { type: "string", minLength: 1 }, currency: { type: "string", minLength: 1 }, decimals: decimalsProperty,
+} as const;
+const inputProperties = {
+  name: nameProperty, value: { type: "number" }, ...displayProperties,
+  min: { type: "number" }, max: { type: "number" }, step: { type: "number" }, options: optionProperty,
+} as const;
+
 const insertBlocksSchema = {
   type: "object",
   properties: {
     blocks: {
       type: "array",
       minItems: 1,
-      items: { type: "object" },
-      description: "Block objects to insert, in document order.",
+      items: { anyOf: [
+        { type: "object", properties: { id: { type: "string" }, type: { const: "heading" }, text: { type: "string" }, level: { type: "integer", enum: [1, 2, 3], default: 2 } }, required: ["type", "text"], additionalProperties: false },
+        { type: "object", properties: { id: { type: "string" }, type: { const: "paragraph" }, text: { type: "string", description: "Plain text; known @name tokens become live references." } }, required: ["type", "text"], additionalProperties: false },
+        { type: "object", properties: { id: { type: "string" }, type: { const: "bullet" }, text: { type: "string" } }, required: ["type", "text"], additionalProperties: false },
+        ...(["number", "slider", "select"] as const).map((type) => ({ type: "object" as const, properties: { id: { type: "string" as const }, type: { const: type }, ...inputProperties }, required: ["type", "name", "value"] as const, additionalProperties: false })),
+        { type: "object", properties: { id: { type: "string" }, type: { const: "formula" }, name: nameProperty, formula: { type: "string", minLength: 1, pattern: "\\S" }, ...displayProperties }, required: ["type", "name", "formula"], additionalProperties: false },
+      ] },
+      description: "Typed blocks to insert in document order. Prefer write_section for complete narrative sections.",
     },
-    referenceBlockId: {
-      type: "string",
-      minLength: 1,
-      description: "Existing block id used as the insertion anchor. Omit to append.",
-    },
-    placement: {
-      type: "string",
-      enum: ["before", "after"],
-      description: "Position relative to referenceBlockId; defaults to after.",
-    },
+    referenceBlockId: { type: "string", minLength: 1, description: "Existing block id used as the insertion anchor. Omit to append." },
+    placement: { type: "string", enum: ["before", "after"], description: "Position relative to referenceBlockId; defaults to after." },
   },
   required: ["blocks"],
   additionalProperties: false,
@@ -105,6 +117,7 @@ const writeSectionSchema = {
           step: { type: "number" },
           unit: { type: "string", minLength: 1 },
           currency: { type: "string", minLength: 1 },
+          decimals: decimalsProperty,
           options: {
             type: "array",
             items: {
@@ -128,6 +141,9 @@ const writeSectionSchema = {
           name: { type: "string", pattern: "^[A-Za-z_][A-Za-z0-9_]*$" },
           formula: { type: "string", minLength: 1, pattern: "\\S" },
           label: { type: "string", minLength: 1 },
+          unit: { type: "string", minLength: 1 },
+          currency: { type: "string", minLength: 1 },
+          decimals: decimalsProperty,
         },
         required: ["name", "formula"],
         additionalProperties: false,

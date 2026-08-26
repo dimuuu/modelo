@@ -11,12 +11,16 @@ export interface SectionInput {
   unit?: string;
   currency?: string;
   options?: Array<{ label: string; value: number }>;
+  decimals?: number;
 }
 
 export interface SectionFormula {
   name: string;
   formula: string;
   label?: string;
+  unit?: string;
+  currency?: string;
+  decimals?: number;
 }
 
 export interface WriteSectionArgs {
@@ -71,6 +75,7 @@ export function buildSectionBlocks(
         ...("max" in value && value.max !== undefined ? { max: value.max } : {}),
         ...("step" in value && value.step !== undefined ? { step: value.step } : {}),
         ...("options" in value && value.options ? { options: value.options } : {}),
+        ...(value.decimals !== undefined ? { decimals: value.decimals } : {}),
       },
     };
   });

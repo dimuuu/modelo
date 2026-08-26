@@ -22,7 +22,12 @@ export interface WorkspaceRenameArgs {
   name: string;
 }
 
-export type NotebookBlock = Record<string, unknown>;
+interface PortableBase { id?: string }
+export type NotebookBlock =
+  | (PortableBase & { type: "heading"; text: string; level?: 1 | 2 | 3 })
+  | (PortableBase & { type: "paragraph" | "bullet"; text: string })
+  | (PortableBase & { type: "number" | "slider" | "select"; name: string; value: number; label?: string; min?: number; max?: number; step?: number; unit?: string; currency?: string; decimals?: number; options?: Array<{ label: string; value: number }> })
+  | (PortableBase & { type: "formula"; name: string; formula: string; label?: string; unit?: string; currency?: string; decimals?: number });
 
 export interface NotebookInsertBlocksArgs {
   blocks: NotebookBlock[];
@@ -44,8 +49,9 @@ export interface NotebookWriteSectionArgs {
     unit?: string;
     currency?: string;
     options?: Array<{ label: string; value: number }>;
+    decimals?: number;
   }>;
-  formulas?: Array<{ name: string; formula: string; label?: string }>;
+  formulas?: Array<{ name: string; formula: string; label?: string; unit?: string; currency?: string; decimals?: number }>;
   referenceBlockId?: string;
   placement?: "before" | "after";
 }

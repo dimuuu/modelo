@@ -15,6 +15,8 @@ const sharedProps = {
   format: { default: "number" },
   currency: { default: "EUR" },
   unit: { default: "" },
+  locale: { default: "" },
+  decimals: { default: -1 },
 };
 
 function Value({ varId, fallback }: { varId: string; fallback?: number }) {
@@ -56,7 +58,7 @@ const SelectBlock = createReactBlockSpec(
 );
 
 const FormulaBlock = createReactBlockSpec(
-  { type: "formula", propSchema: { varId: { default: "" }, name: { default: "result" }, label: { default: "Formula" }, formula: { default: "1 + 1" }, format: { default: "number" }, currency: { default: "EUR" }, unit: { default: "" } }, content: "none" },
+  { type: "formula", propSchema: { varId: { default: "" }, name: { default: "result" }, label: { default: "Formula" }, formula: { default: "1 + 1" }, format: { default: "number" }, currency: { default: "EUR" }, unit: { default: "" }, locale: { default: "" }, decimals: { default: -1 } }, content: "none" },
   { render: ({ block, editor }) => <div className="model-block formula-block"><div className="model-meta"><strong>{block.props.label}</strong><VariableName block={block} editor={editor}/></div><input className="formula-input" aria-label={`${block.props.label} expression`} value={block.props.formula} onChange={(e) => editor.transact(() => editor.updateBlock(block, { props: { formula: e.target.value } }))}/><Value varId={block.props.varId}/></div> }
 );
 

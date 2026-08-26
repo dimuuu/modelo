@@ -6,7 +6,7 @@ import type {
   ProjectedModel,
   ProjectedVariable,
 } from "../model";
-import { formatValue } from "./format";
+import { formatValue, type FormatDefaults } from "./format";
 
 const math = create(all, { number: "number", predictable: true });
 const forbiddenSymbols = new Set(["random", "randomInt", "pickRandom"]);
@@ -60,8 +60,13 @@ function inspectFormula(variable: ProjectedFormula, model: ProjectedModel): {
   }
 }
 
+/** Returns exact MathJS symbol dependencies for a projected formula. */
+export function getFormulaDependencies(variable: ProjectedFormula, model: ProjectedModel): string[] {
+  return inspectFormula(variable, model).dependencies;
+}
+
 /** Evaluates a projected registry with dependency ordering independent of block order. */
-export function evaluateModel(model: ProjectedModel): EvaluationResult {
+export function evaluateModel(model: ProjectedModel, defaults: FormatDefaults = {}): EvaluationResult {
   const byId: Record<string, EvaluatedVariable> = Object.create(null);
   const states: Record<string, EvaluationState | undefined> = Object.create(null);
 
@@ -75,7 +80,7 @@ export function evaluateModel(model: ProjectedModel): EvaluationResult {
     let result: EvaluatedVariable;
     if (variable.kind === "input") {
       result = Number.isFinite(variable.value)
-        ? { ...variable, status: "ok", formatted: formatValue(variable.value, variable) }
+        ? { ...variable, status: "ok", formatted: formatValue(variable.value, variable, defaults) }
         : errorResult(variable, "Input must be a finite number");
     } else {
       const inspected = inspectFormula(variable, model);
@@ -103,11 +108,11 @@ export function evaluateModel(model: ProjectedModel): EvaluationResult {
             if (isUnit(value)) {
               const numeric = Number(value.toNumeric(variable.unit || undefined));
               result = Number.isFinite(numeric)
-                ? { ...variable, status: "ok", value: numeric, formatted: variable.unit ? formatValue(numeric, { style: "unit", unit: variable.unit }) : value.toString() }
+                ? { ...variable, status: "ok", value: numeric, formatted: variable.unit ? formatValue(numeric, { style: "unit", unit: variable.unit, locale: variable.locale || defaults.locale, minimumFractionDigits: variable.decimals, maximumFractionDigits: variable.decimals }) : value.toString() }
                 : errorResult(variable, "Formula must return a finite quantity");
             } else {
               result = typeof value === "number" && Number.isFinite(value)
-                ? { ...variable, status: "ok", value, formatted: formatValue(value, variable) }
+                ? { ...variable, status: "ok", value, formatted: formatValue(value, variable, defaults) }
                 : errorResult(variable, "Formula must return a finite number");
             }
           } catch (error) {

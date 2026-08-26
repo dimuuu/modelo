@@ -46,6 +46,7 @@ Tool failures are structured `{ ok: false, error: { code, message, details? } }`
 ### Suggested prompts against the Sales notebook
 
 To build a new model, ask ChatGPT to `write_section` rather than dump variables.
+Use typed `insert_blocks` only for targeted block surgery; paragraph `@name` tokens become live references.
 
 1. “List the notebooks, open the AE compensation notebook, then summarize its model and any errors.”
 2. “Set `closed_arr` to 1,050,000 and tell me the new earned commission and total cash compensation.”

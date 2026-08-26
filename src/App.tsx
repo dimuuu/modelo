@@ -3,9 +3,9 @@ import { BlockNoteView } from "@blocknote/mantine";
 import { SuggestionMenuController, getDefaultReactSlashMenuItems, useCreateBlockNote } from "@blocknote/react";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
-import { buildSectionBlocks, evaluateModel, getComposition, inlineContentFromText, projectDocument, renameVariable } from "./engine";
+import { buildSectionBlocks, evaluateModel, getComposition, getModelSummary, inlineContentFromText, projectDocument, renameVariable } from "./engine";
 import { ModelProvider, modeloSchema, newVariableProps, type ModeloEditor } from "./editor";
-import { loadWorkspace, portableToEditorBlocks, saveWorkspace, STORAGE_KEY, type Notebook, type Workspace } from "./workspace";
+import { DEFAULT_CURRENCY, DEFAULT_LOCALE, loadWorkspace, portableToEditorBlocks, saveWorkspace, STORAGE_KEY, type Notebook, type Workspace } from "./workspace";
 import { useModeloTools, type ModeloToolsAdapter } from "./webmcp/useModeloTools";
 import "./styles.css";
 
@@ -24,7 +24,32 @@ function textContent(block: any): string {
   return block.content.map((node: any) => node.type === "text" ? node.text : node.type === "variableRef" ? `@${node.props?.label || node.props?.varId}` : "").join("");
 }
 
-function NotebookEditor({ notebook, onSave, expose }: { notebook: Notebook; onSave: (blocks: unknown[]) => void; expose: (editor: ModeloEditor | null) => void }) {
+function unknownReferences(text: string, idByName: Record<string, string>): string[] {
+  return [...text.matchAll(/@([A-Za-z_][A-Za-z0-9_]*)/g)]
+    .map((match) => match[1])
+    .filter((name, index, names) => !Object.prototype.hasOwnProperty.call(idByName, name) && names.indexOf(name) === index)
+    .map((name) => `Unknown @${name} left as literal text.`);
+}
+
+function slimBlock(block: any) {
+  return { id: block.id, type: block.type, ...(block.props?.varId ? { props: block.props } : { text: textContent(block) }) };
+}
+
+function mutationResult(document: any[], insertedBlockIds: string[], workspace: Workspace, warnings: string[]) {
+  const evaluated = evaluateModel(projectDocument(document), workspace);
+  return {
+    insertedBlockIds,
+    blocks: document.filter((block) => insertedBlockIds.includes(block.id)).map(slimBlock),
+    composition: getComposition(document),
+    model: {
+      values: Object.fromEntries(evaluated.variables.filter((variable) => variable.status === "ok").map((variable) => [variable.name, { value: variable.value, formatted: variable.formatted }])),
+      errors: evaluated.variables.filter((variable) => variable.status !== "ok").map((variable) => ({ name: variable.name, status: variable.status, error: variable.error })),
+    },
+    warnings,
+  };
+}
+
+function NotebookEditor({ notebook, workspace, onSave, expose }: { notebook: Notebook; workspace: Workspace; onSave: (blocks: unknown[]) => void; expose: (editor: ModeloEditor | null) => void }) {
   const initial = useMemo(() => {
     const blocks = portableToEditorBlocks(notebook.blocks as any[]);
     return blocks.length ? blocks : [{ type: "paragraph", content: "" }];
@@ -34,9 +59,9 @@ function NotebookEditor({ notebook, onSave, expose }: { notebook: Notebook; onSa
   useEffect(() => { expose(editor); return () => expose(null); }, [editor, expose]);
 
   const model = useMemo(() => {
-    try { return evaluateModel(projectDocument(documentBlocks)); }
+    try { return evaluateModel(projectDocument(documentBlocks), workspace); }
     catch (error) { console.warn("Model projection error", error); return { variables: [], byId: {}, byName: {} }; }
-  }, [documentBlocks]);
+  }, [documentBlocks, workspace.currency, workspace.locale]);
 
   const slashItems = useCallback(async (query: string) => {
     const insert = (kind: "number"|"slider"|"select"|"formula") => ({
@@ -97,18 +122,53 @@ export default function App() {
     };
     return {
       workspace: {
-        list: () => ok({ notebooks: workspaceRef.current.notebooks.map(({ id, title, updatedAt }) => ({ id, title, updatedAt })), openNotebookId: openIdRef.current }),
+        list: () => ok({ currency: workspaceRef.current.currency, locale: workspaceRef.current.locale, notebooks: workspaceRef.current.notebooks.map(({ id, title, updatedAt }) => ({ id, title, updatedAt })), openNotebookId: openIdRef.current }),
         open: ({ id }) => { if (!workspaceRef.current.notebooks.some((n) => n.id === id)) fault("NOT_FOUND", `Notebook '${id}' not found.`); setOpenId(id); return ok({ id }); },
-        create: ({ name }) => { const notebook = { id: uid(), title: name.trim() || "Untitled", blocks: [], updatedAt: new Date().toISOString() }; updateWorkspace((w) => ({ ...w, notebooks: [...w.notebooks, notebook] })); setOpenId(notebook.id); return ok({ ...notebook, composition: getComposition([]) }); },
+        create: ({ name }) => { const notebook = { id: uid(), title: name.trim() || "Untitled", blocks: [], updatedAt: new Date().toISOString() }; updateWorkspace((w) => ({ ...w, notebooks: [...w.notebooks, notebook] })); setOpenId(notebook.id); return ok({ ...notebook, currency: workspaceRef.current.currency, locale: workspaceRef.current.locale, composition: getComposition([]) }); },
         duplicate: ({ id, name }) => { const source = workspaceRef.current.notebooks.find((n) => n.id === id) ?? fault("NOT_FOUND", `Notebook '${id}' not found.`); const copy = { ...JSON.parse(JSON.stringify(source)), id: uid(), title: name ?? `${source.title} copy`, updatedAt: new Date().toISOString() }; updateWorkspace((w) => ({ ...w, notebooks: [...w.notebooks, copy] })); return ok(copy); },
         delete: ({ id }) => { if (!workspaceRef.current.notebooks.some((n) => n.id === id)) fault("NOT_FOUND", `Notebook '${id}' not found.`); updateWorkspace((w) => ({ ...w, notebooks: w.notebooks.filter((n) => n.id !== id) })); if (openIdRef.current === id) setOpenId(null); return ok({ id }); },
         rename: ({ id, name }) => { updateWorkspace((w) => ({ ...w, notebooks: w.notebooks.map((n) => n.id === id ? { ...n, title: name.trim() || n.title, updatedAt: new Date().toISOString() } : n) })); return ok({ id, name }); },
       },
       notebook: openId ? {
-        getDocument: () => { const blocks = currentEditor().document as any[]; return ok({ notebook: { id: currentNotebook().id, title: currentNotebook().title }, blocks: blocks.map((block, i) => ({ id: block.id, type: block.type, ...(block.props?.varId ? { props: block.props } : { text: textContent(block) }), previousId: blocks[i-1]?.id ?? null, nextId: blocks[i+1]?.id ?? null })), composition: getComposition(blocks as any) }); },
-        getModel: () => { const editor = currentEditor(); const projected = projectDocument(editor.document as any); const evaluated = evaluateModel(projected); return ok(evaluated.variables.map((variable) => ({ id: variable.varId, name: variable.name, kind: variable.kind, value: variable.value, unit: variable.unit || variable.currency, error: variable.error ?? null, usedBy: (editor.document as any[]).filter((b) => (b.type === "formula" && String(b.props?.formula).includes(variable.name)) || JSON.stringify(b.content).includes(variable.varId)).map((b) => b.id) }))); },
-        writeSection: (args) => { const editor = currentEditor(); const model = projectDocument(editor.document as any); const names = [...(args.inputs ?? []), ...(args.formulas ?? [])].map((item) => item.name); const seen = new Set<string>(); for (const name of names) { ensureUniqueName(name); if (seen.has(name)) fault("DUPLICATE_VARIABLE_NAME", `Variable '${name}' already exists.`); seen.add(name); } const converted = portableToEditorBlocks(buildSectionBlocks(args, model.idByName, uid)); editor.transact(() => { if (args.referenceBlockId) editor.insertBlocks(converted as any, args.referenceBlockId, args.placement ?? "after"); else if (editor.document.length === 1 && editor.document[0].type === "paragraph" && textContent(editor.document[0]) === "") editor.replaceBlocks(editor.document, converted as any); else editor.insertBlocks(converted as any, editor.document.at(-1)!, "after"); }); return ok({ insertedBlockIds: converted.map((block) => block.id), composition: getComposition(editor.document as any) }); },
-        insertBlocks: ({ blocks, referenceBlockId, placement }) => { const editor = currentEditor(); const converted = portableToEditorBlocks(blocks as any[]); for (const block of converted as any[]) if (block.props?.name) ensureUniqueName(block.props.name); editor.transact(() => { if (referenceBlockId) editor.insertBlocks(converted as any, referenceBlockId, placement ?? "after"); else editor.insertBlocks(converted as any, editor.document.at(-1)!, "after"); }); return ok({ inserted: converted.length }); },
+        getDocument: () => { const blocks = currentEditor().document as any[]; return ok({ notebook: { id: currentNotebook().id, title: currentNotebook().title }, currency: workspaceRef.current.currency, locale: workspaceRef.current.locale, blocks: blocks.map((block, i) => ({ ...slimBlock(block), previousId: blocks[i-1]?.id ?? null, nextId: blocks[i+1]?.id ?? null })), composition: getComposition(blocks as any) }); },
+        getModel: () => ok(getModelSummary(currentEditor().document as any, workspaceRef.current)),
+        writeSection: (args) => {
+          const editor = currentEditor();
+          const model = projectDocument(editor.document as any);
+          const names = [...(args.inputs ?? []), ...(args.formulas ?? [])].map((item) => item.name);
+          const seen = new Set<string>();
+          for (const name of names) { ensureUniqueName(name); if (seen.has(name)) fault("DUPLICATE_VARIABLE_NAME", `Variable '${name}' already exists.`); seen.add(name); }
+          const portable = buildSectionBlocks(args, model.idByName, uid);
+          const finalNames = { ...model.idByName, ...Object.fromEntries(portable.filter((block) => block.props?.name).map((block) => [block.props.name, block.props.varId])) };
+          const warnings = unknownReferences(args.body, finalNames);
+          const converted = portableToEditorBlocks(portable, finalNames);
+          editor.transact(() => { if (args.referenceBlockId) editor.insertBlocks(converted as any, args.referenceBlockId, args.placement ?? "after"); else if (editor.document.length === 1 && editor.document[0].type === "paragraph" && textContent(editor.document[0]) === "") editor.replaceBlocks(editor.document, converted as any); else editor.insertBlocks(converted as any, editor.document.at(-1)!, "after"); });
+          return ok(mutationResult(editor.document as any[], converted.map((block) => block.id), workspaceRef.current, warnings));
+        },
+        insertBlocks: ({ blocks, referenceBlockId, placement }) => {
+          const editor = currentEditor();
+          const model = projectDocument(editor.document as any);
+          const idByName = { ...model.idByName };
+          const seen = new Set<string>();
+          const portable = (blocks as any[]).map((block) => {
+            const next = { ...block, id: block.id || uid() };
+            if (["number", "slider", "select", "formula"].includes(block.type)) {
+              ensureUniqueName(block.name);
+              if (seen.has(block.name)) fault("DUPLICATE_VARIABLE_NAME", `Variable '${block.name}' already exists.`);
+              seen.add(block.name);
+              const varId = block.varId || uid();
+              idByName[block.name] = varId;
+              next.varId = varId;
+              if (block.currency && !block.format) next.format = "currency";
+              else if (block.unit && !block.format) next.format = "unit";
+            }
+            return next;
+          });
+          const warnings = portable.flatMap((block) => block.type === "paragraph" && typeof block.text === "string" ? unknownReferences(block.text, idByName) : []);
+          const converted = portableToEditorBlocks(portable, idByName);
+          editor.transact(() => { if (referenceBlockId) editor.insertBlocks(converted as any, referenceBlockId, placement ?? "after"); else if (editor.document.length === 1 && editor.document[0].type === "paragraph" && textContent(editor.document[0]) === "") editor.replaceBlocks(editor.document, converted as any); else editor.insertBlocks(converted as any, editor.document.at(-1)!, "after"); });
+          return ok(mutationResult(editor.document as any[], converted.map((block) => block.id), workspaceRef.current, warnings));
+        },
         updateBlock: ({ id, patch }) => { const editor = currentEditor(); const block = editor.getBlock(id) as any; if (!block) fault("NOT_FOUND", `Block '${id}' not found.`); const nextName = (patch.props as any)?.name; if (nextName && block.props?.varId && nextName !== block.props.name) { ensureUniqueName(nextName, block.props.varId); const renamed = renameVariable(editor.document as any, block.props.varId, nextName); editor.transact(() => editor.replaceBlocks(editor.document, renamed as any)); const rest = { ...patch, props: { ...(patch.props as any) } }; delete (rest.props as any).name; if (Object.keys(rest.props as any).length) editor.transact(() => editor.updateBlock(id, rest as any)); } else editor.transact(() => editor.updateBlock(id, patch as any)); return ok({ id }); },
         removeBlocks: ({ ids }) => { const editor = currentEditor(); const missing = ids.filter((id) => !editor.getBlock(id)); if (missing.length) fault("NOT_FOUND", "Some blocks do not exist.", { ids: missing }); editor.transact(() => editor.removeBlocks(ids)); return ok({ removed: ids }); },
         replaceParagraph: ({ id, text }) => { const editor = currentEditor(); if (!editor.getBlock(id)) fault("NOT_FOUND", `Block '${id}' not found.`); const model = projectDocument(editor.document as any); const content = portableToEditorBlocks([{ type: "paragraph", inline: inlineContentFromText(text, model.idByName) }])[0].content; editor.transact(() => editor.updateBlock(id, { type: "paragraph", content } as any)); return ok({ id }); },
@@ -121,7 +181,7 @@ export default function App() {
 
   const createNotebook = () => adapter.workspace.create({ name: "Untitled notebook" });
   const deleteNotebook = (id: string) => { if (confirm("Delete this notebook?")) adapter.workspace.delete({ id }); };
-  const importWorkspace = (file: File) => file.text().then((text) => { const parsed = JSON.parse(text); if (parsed.version !== 1 || !Array.isArray(parsed.notebooks)) throw new Error("Not a Modelo workspace export"); localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed)); setWorkspace(parsed); setOpenId(parsed.notebooks[0]?.id ?? null); }).catch((error) => alert(error.message));
+  const importWorkspace = (file: File) => file.text().then((text) => { const parsed = JSON.parse(text); if (parsed.version !== 1 || !Array.isArray(parsed.notebooks)) throw new Error("Not a Modelo workspace export"); const normalized = { ...parsed, currency: parsed.currency || DEFAULT_CURRENCY, locale: parsed.locale || DEFAULT_LOCALE }; localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized)); setWorkspace(normalized); setOpenId(normalized.notebooks[0]?.id ?? null); }).catch((error) => alert(error.message));
 
   return <div className="app">
     <aside className="sidebar">
@@ -130,6 +190,6 @@ export default function App() {
       <nav>{workspace.notebooks.map((notebook) => <div className={`notebook-row ${notebook.id === openId ? "active" : ""}`} key={notebook.id}><button className="notebook-link" onClick={() => setOpenId(notebook.id)}>{notebook.title}</button><button title="Duplicate" onClick={() => adapter.workspace.duplicate({ id: notebook.id })}>⧉</button><button title="Delete" onClick={() => deleteNotebook(notebook.id)}>×</button></div>)}</nav>
       <div className="sidebar-footer"><span className={`status ${webmcp.supported ? "on" : ""}`}>{webmcp.supported ? "WebMCP ready" : "WebMCP unavailable"}</span><button onClick={() => download("modelo-workspace.json", workspace)}>Export all</button><label className="import-label">Import<input type="file" accept="application/json" onChange={(e) => e.target.files?.[0] && importWorkspace(e.target.files[0])}/></label></div>
     </aside>
-    <main>{openNotebook ? <><header className="notebook-header"><input aria-label="Notebook title" value={openNotebook.title} onChange={(e) => adapter.workspace.rename({ id: openNotebook.id, name: e.target.value })}/><button onClick={() => download(`${openNotebook.title}.json`, openNotebook)}>Export</button></header><NotebookEditor key={openNotebook.id} notebook={openNotebook} onSave={saveOpenDocument} expose={expose}/></> : <section className="workspace-home"><p className="eyebrow">Workspace</p><h1>Notebook and model, together.</h1><p>Open a notebook from the left, or create a blank one. Your workspace stays in this browser.</p><button className="primary" onClick={createNotebook}>New notebook</button></section>}</main>
+    <main>{openNotebook ? <><header className="notebook-header"><input aria-label="Notebook title" value={openNotebook.title} onChange={(e) => adapter.workspace.rename({ id: openNotebook.id, name: e.target.value })}/><button onClick={() => download(`${openNotebook.title}.json`, openNotebook)}>Export</button></header><NotebookEditor key={openNotebook.id} notebook={openNotebook} workspace={workspace} onSave={saveOpenDocument} expose={expose}/></> : <section className="workspace-home"><p className="eyebrow">Workspace</p><h1>Notebook and model, together.</h1><p>Open a notebook from the left, or create a blank one. Your workspace stays in this browser.</p><button className="primary" onClick={createNotebook}>New notebook</button></section>}</main>
   </div>;
 }
