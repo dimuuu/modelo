@@ -26,7 +26,7 @@ pnpm dev
 Checks:
 
 ```bash
-pnpm test     # vitest, 50 tests
+pnpm test     # vitest, 96 tests
 pnpm check    # oxlint via ultracite
 pnpm fix      # oxlint --fix and oxfmt --write
 pnpm build    # tsc -b && vite build
@@ -37,7 +37,7 @@ pnpm build    # tsc -b && vite build
 - **React 19 + Vite 7 + TypeScript** — no framework, no server.
 - **BlockNote 0.54** — the editor, and the single source of truth for the document.
 - **MathJS 15** — formula parsing, unit algebra, and evaluation.
-- **zod 4** — every value crossing a boundary is parsed: WebMCP tool arguments, `localStorage`, and imported files. `src/webmcp/schemas.ts` is the single source for tool argument shapes.
+- **zod 4** — every value crossing a boundary is parsed: WebMCP tool arguments, `localStorage`, and imported files. Domain schemas live with their engine module; `src/webmcp/schemas.ts` composes them into tool arguments.
 - **Tailwind CSS v4 + shadcn/ui (Base UI)** — every control in the app. The only hand-written CSS left is `src/blocknote-theme.css`, which binds BlockNote's own editor surface to the shadcn design tokens.
 - **Ultracite + oxlint + oxfmt** — formatting and linting. `oxlint.config.ts` documents every rule the project overrides and why.
 
@@ -69,11 +69,17 @@ To build a new model, ask the agent to `write_section` rather than dump variable
 
 ## Architecture
 
-`editor.document` is the open notebook's only document source of truth. Human input and WebMCP operations mutate it. `onChange` projects variables, evaluates the graph, paints formula/ref values, and persists the resulting snapshot. React state only selects the open notebook and owns the workspace catalogue; there is no parallel Zustand document, collaboration layer, server, or auth.
+`editor.document` is the open notebook's only document source of truth. Human controls and WebMCP tools mutate it through the same `EditorPort` seam and the same mutation functions. `describeNotebook` projects variables and evaluates the graph once per document version; `ModelProvider` paints the result; `onChange` converts the document to the portable format and persists it. React state holds the workspace catalogue and the id of the open notebook, nothing more.
+
+Three ideas carry the design:
+
+- **One portable format** for seeds, storage, exports, agent payloads, and `get_document` (`src/engine/portable.ts`).
+- **An editor port with two adapters**: BlockNote in the app, an in-memory array in tests and for `dry_run` (`src/notebook/`).
+- **A tool table**: every WebMCP tool is one row with its name, schema, description, and implementation (`src/webmcp/tools.ts`). The sidebar buttons call the same `runTool` an agent does.
 
 Seeds are repository JSON fixtures copied only when the storage key is absent. Existing storage is authoritative on later deploys.
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for the module map and the recipes for adding a block type or a WebMCP tool, and [DECISIONS.md](./DECISIONS.md) for open questions and standing assumptions.
+See [CONTEXT.md](./CONTEXT.md) for the vocabulary, [CONTRIBUTING.md](./CONTRIBUTING.md) for the module map and the recipes for adding a block type or a WebMCP tool, and [DECISIONS.md](./DECISIONS.md) for open questions and standing assumptions.
 
 ## Browser data
 

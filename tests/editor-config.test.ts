@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { clampSliderValue, parseSelectOptions } from "../src/editor";
+import { clampSliderValue, parseSelectOptions } from "../src/engine/variable";
 
 describe("model block config helpers", () => {
   it("parses only finite numeric select options", () => {

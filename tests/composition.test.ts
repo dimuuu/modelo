@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  buildSectionBlocks,
-  getComposition,
-  inlineContentFromText,
-} from "../src/engine";
+import { getComposition } from "../src/engine/composition";
+import { inlineContentFromText } from "../src/engine/portable";
+import { buildSectionBlocks } from "../src/engine/section";
 
 describe("document composition", () => {
   it("reports an empty document as a balanced story", () => {
@@ -75,9 +73,11 @@ describe("document composition", () => {
   });
 });
 
-function unitEconomics() {
+type LooseBlock = Record<string, unknown>;
+
+function unitEconomics(): LooseBlock[] {
   let next = 0;
-  return buildSectionBlocks(
+  const blocks = buildSectionBlocks(
     {
       body: "Revenue is @revenue and cost is @cost.\n\nMargin is @margin.",
       formulas: [
@@ -99,6 +99,7 @@ function unitEconomics() {
     { cost: "cost-id" },
     () => `id-${(next += 1)}`
   );
+  return blocks as LooseBlock[];
 }
 
 describe("write_section block builder", () => {
@@ -120,7 +121,7 @@ describe("write_section block builder", () => {
     const blocks = unitEconomics();
     expect(blocks[1].inline).toEqual([
       "Revenue is ",
-      { label: "revenue", type: "ref", varId: blocks[3].props.varId },
+      { label: "revenue", type: "ref", varId: blocks[3].varId },
       " and cost is ",
       { label: "cost", type: "ref", varId: "cost-id" },
       ".",
@@ -128,7 +129,7 @@ describe("write_section block builder", () => {
     // `margin` is declared by this same call, so a forward reference still links.
     expect(blocks[2].inline).toEqual([
       "Margin is ",
-      { label: "margin", type: "ref", varId: blocks[4].props.varId },
+      { label: "margin", type: "ref", varId: blocks[4].varId },
       ".",
     ]);
   });
@@ -141,13 +142,13 @@ describe("write_section block builder", () => {
 
   it("infers currency format for inputs and gives formulas no display format", () => {
     const blocks = unitEconomics();
-    expect(blocks[3].props).toMatchObject({
+    expect(blocks[3]).toMatchObject({
       currency: "EUR",
       format: "currency",
       name: "revenue",
       value: 100,
     });
-    expect(blocks[4].props).not.toHaveProperty("format");
+    expect(blocks[4]).not.toHaveProperty("format");
   });
 
   it("builds boolean inputs for write_section", () => {
@@ -162,8 +163,9 @@ describe("write_section block builder", () => {
       () => `bool-${(next += 1)}`
     );
     expect(blocks[2]).toMatchObject({
-      props: { name: "hired", value: 1 },
+      name: "hired",
       type: "boolean",
+      value: 1,
     });
   });
 });

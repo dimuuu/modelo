@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 
+import { evaluateModel } from "../src/engine/evaluate";
+import { formatValue } from "../src/engine/format";
 import {
   DuplicateVariableNameError,
-  evaluateModel,
-  formatValue,
   projectDocument,
-  renameVariable,
-} from "../src/engine";
+} from "../src/engine/projector";
+import { renameVariable } from "../src/engine/rename";
 import type { ModeloDocument } from "../src/model";
 
 const document: ModeloDocument = [
@@ -19,7 +19,7 @@ const document: ModeloDocument = [
       value: 1200,
       varId: "revenue-id",
     },
-    type: "modelVariable",
+    type: "number",
   },
   {
     id: "cost-block",
@@ -30,12 +30,12 @@ const document: ModeloDocument = [
       value: 450,
       varId: "cost-id",
     },
-    type: "modelVariable",
+    type: "number",
   },
   {
     id: "profit-block",
     props: { formula: "revenue - cost", name: "profit", varId: "profit-id" },
-    type: "modelFormula",
+    type: "formula",
   },
 ];
 
@@ -54,12 +54,12 @@ describe("Modelo deterministic engine", () => {
       {
         id: "a",
         props: { formula: "b * 2", name: "a", varId: "a-id" },
-        type: "modelFormula",
+        type: "formula",
       },
       {
         id: "b",
         props: { name: "b", value: 3, varId: "b-id" },
-        type: "modelVariable",
+        type: "number",
       },
     ]);
     expect(evaluateModel(projected).byId["a-id"]).toMatchObject({
@@ -106,12 +106,12 @@ describe("Modelo deterministic engine", () => {
             name: "other",
             varId: "other-id",
           },
-          type: "modelFormula",
+          type: "formula",
         },
         {
           id: "growth",
           props: { name: "revenue_growth", value: 2, varId: "growth-id" },
-          type: "modelVariable",
+          type: "number",
         },
       ],
       "revenue-id",
@@ -150,7 +150,7 @@ describe("Modelo deterministic engine", () => {
             name: "distance",
             varId: "distance-id",
           },
-          type: "modelFormula",
+          type: "formula",
         },
       ])
     ).byId["distance-id"];
@@ -602,7 +602,7 @@ describe("Modelo deterministic engine", () => {
         {
           id: "bad",
           props: { formula: "2 / 0", name: "bad", varId: "bad-id" },
-          type: "modelFormula",
+          type: "formula",
         },
       ])
     ).byId["bad-id"];
@@ -616,12 +616,12 @@ describe("Modelo deterministic engine", () => {
         {
           id: "one",
           props: { name: "same", value: 1, varId: "one-id" },
-          type: "modelVariable",
+          type: "number",
         },
         {
           id: "two",
           props: { name: "same", value: 2, varId: "two-id" },
-          type: "modelVariable",
+          type: "number",
         },
       ])
     ).toThrow(DuplicateVariableNameError);

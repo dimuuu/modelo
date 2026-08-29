@@ -1,6 +1,9 @@
-import { isSymbolNode, parse, SymbolNode } from "mathjs";
+import { isSymbolNode, SymbolNode } from "mathjs";
 
-import type { ModeloBlock, ModeloDocument } from "../model";
+import type { ModeloDocument } from "../model";
+import { isFormulaBlockType, mapBlocks } from "./document";
+import { defaultFormulaEngine } from "./evaluate";
+import type { FormulaEngine } from "./evaluate";
 import {
   DuplicateVariableNameError,
   ModelValidationError,
@@ -10,10 +13,12 @@ import {
 function rewriteFormula(
   formula: string,
   oldName: string,
-  newName: string
+  newName: string,
+  engine: FormulaEngine
 ): string {
   try {
-    return parse(formula)
+    return engine
+      .parse(formula)
       .transform((node) =>
         isSymbolNode(node) && node.name === oldName
           ? new SymbolNode(newName)
@@ -30,7 +35,8 @@ function rewriteFormula(
 export function renameVariable(
   document: ModeloDocument,
   varId: string,
-  newName: string
+  newName: string,
+  engine: FormulaEngine = defaultFormulaEngine
 ): ModeloDocument {
   const projected = projectDocument(document);
   const target = projected.byId[varId];
@@ -42,33 +48,24 @@ export function renameVariable(
     throw new DuplicateVariableNameError(newName);
   }
 
-  const renameBlocks = (blocks: ModeloDocument): ModeloDocument =>
-    blocks.map((block) => {
-      const props = block.props as Record<string, unknown> | undefined;
-      let nextProps = props ? { ...props } : undefined;
-      if (props?.varId === varId) {
-        nextProps = { ...props, name: newName };
-      }
-      if (
-        (block.type === "modelFormula" || block.type === "formula") &&
-        typeof props?.formula === "string"
-      ) {
-        nextProps = {
-          ...props,
-          formula: rewriteFormula(props.formula, target.name, newName),
-        };
-      }
-      const next: ModeloBlock = { ...block };
-      if (nextProps) {
-        next.props = nextProps;
-      }
-      if (Array.isArray(block.children)) {
-        next.children = renameBlocks(block.children as ModeloDocument);
-      }
-      return next;
-    });
+  const renamed = mapBlocks(document, (block) => {
+    const props = block.props as Record<string, unknown> | undefined;
+    if (!props) {
+      return block;
+    }
+    let nextProps = props;
+    if (props.varId === varId) {
+      nextProps = { ...nextProps, name: newName };
+    }
+    if (isFormulaBlockType(block.type) && typeof props.formula === "string") {
+      nextProps = {
+        ...nextProps,
+        formula: rewriteFormula(props.formula, target.name, newName, engine),
+      };
+    }
+    return nextProps === props ? block : { ...block, props: nextProps };
+  });
 
-  const renamed = renameBlocks(document);
   projectDocument(renamed);
   return renamed;
 }

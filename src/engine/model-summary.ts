@@ -1,12 +1,14 @@
 import type {
+  EvaluationResult,
   FormatKind,
   ModeloDocument,
-  NumberFormat,
-  ProjectedInput,
+  ProjectedModel,
 } from "../model";
 import { evaluateModel } from "./evaluate";
+import type { FormatDefaults } from "./format";
 import { projectDocument } from "./projector";
 import { findReferences } from "./references";
+import { currencyOf, formatKindOf, unitOf } from "./variable";
 
 export interface ModelSummaryOptions {
   includeDependencies?: boolean;
@@ -25,30 +27,23 @@ export interface ModelSummaryVariable {
   usedBy?: string[];
 }
 
-function formatKind(variable: ProjectedInput): FormatKind {
-  if (typeof variable.format === "string") {
-    return variable.format;
-  }
-  return variable.format?.style ?? "number";
-}
-
-function nestedFormat(variable: ProjectedInput): NumberFormat | undefined {
-  return typeof variable.format === "object" ? variable.format : undefined;
+function summarize(document: ModeloDocument, defaults: FormatDefaults) {
+  const projected = projectDocument(document);
+  return { evaluated: evaluateModel(projected, defaults), projected };
 }
 
 /** Builds the slim, read-only get_model projection. */
 export function getModelSummary(
   document: ModeloDocument,
-  defaults: { currency?: string; locale?: string } = {},
-  options: ModelSummaryOptions = {}
+  defaults: FormatDefaults = {},
+  options: ModelSummaryOptions = {},
+  model: { projected: ProjectedModel; evaluated: EvaluationResult } = summarize(
+    document,
+    defaults
+  )
 ): ModelSummaryVariable[] {
-  const projected = projectDocument(document);
-  const evaluated = evaluateModel(projected, defaults);
-
-  return evaluated.variables.map((variable) => {
-    const format = variable.kind === "input" ? formatKind(variable) : null;
-    const nested =
-      variable.kind === "input" ? nestedFormat(variable) : undefined;
+  return model.evaluated.variables.map((variable) => {
+    const format = variable.kind === "input" ? formatKindOf(variable) : null;
     const summary: ModelSummaryVariable = {
       blockId: variable.blockId,
       error: variable.error ?? null,
@@ -59,21 +54,20 @@ export function getModelSummary(
       value: variable.value ?? null,
     };
     if (variable.kind === "input" && format === "currency") {
-      summary.currency =
-        variable.currency ||
-        (nested?.style === "currency" ? nested.currency : undefined) ||
-        defaults.currency ||
-        "EUR";
+      summary.currency = currencyOf(variable, defaults);
     }
     if (variable.kind === "input" && format === "unit") {
-      const unit =
-        variable.unit || (nested?.style === "unit" ? nested.unit : undefined);
+      const unit = unitOf(variable);
       if (unit) {
         summary.unit = unit;
       }
     }
     if (options.includeDependencies) {
-      const references = findReferences(document, { varId: variable.varId });
+      const references = findReferences(
+        document,
+        { varId: variable.varId },
+        model.projected
+      );
       summary.usedBy = [...references.formulas, ...references.paragraphs];
     }
     return summary;

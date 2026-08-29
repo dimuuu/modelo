@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
 
+import { toEditorBlocks } from "../src/engine/portable";
 import {
+  createNotebook,
+  deleteNotebook,
+  duplicateNotebook,
   loadWorkspace,
-  portableToEditorBlocks,
+  renameNotebook,
+  replaceNotebookBlocks,
   saveWorkspace,
   seededWorkspace,
+  setNotebookScenarios,
   STORAGE_KEY,
 } from "../src/workspace";
 
@@ -41,20 +47,15 @@ describe("workspace persistence", () => {
     ).toBe(false);
   });
 
-  it("defaults currency and locale when loading an older v1 workspace", () => {
+  it("falls back to the seeds when storage does not hold a valid workspace", () => {
     const storage = {
       getItem: () => JSON.stringify({ notebooks: [], version: 1 }),
     } as Pick<Storage, "getItem">;
-    expect(loadWorkspace(storage)).toEqual({
-      currency: "EUR",
-      locale: "es-ES",
-      notebooks: [],
-      version: 1,
-    });
+    expect(loadWorkspace(storage).notebooks).toHaveLength(3);
   });
 
   it("converts typed flat blocks and parses known @names in paragraph text", () => {
-    const blocks = portableToEditorBlocks(
+    const blocks = toEditorBlocks(
       [
         { id: "heading", text: "Analysis", type: "heading" },
         {
@@ -71,8 +72,8 @@ describe("workspace persistence", () => {
         },
       ],
       { revenue: "revenue-id" }
-    );
-    expect(blocks[0].props.level).toBe(2);
+    ) as { props?: Record<string, unknown>; content?: unknown }[];
+    expect(blocks[0].props?.level).toBe(2);
     expect(blocks[1].props).toMatchObject({
       decimals: 2,
       name: "revenue",
@@ -85,5 +86,60 @@ describe("workspace persistence", () => {
       { styles: {}, text: "@missing", type: "text" },
       { styles: {}, text: " stays literal.", type: "text" },
     ]);
+  });
+});
+
+describe("workspace reducers", () => {
+  it("create, duplicate, rename, and delete without touching other notebooks", () => {
+    const base = seededWorkspace();
+    const created = createNotebook(base, "  ", "new-id");
+    expect(created.notebook).toMatchObject({
+      blocks: [],
+      id: "new-id",
+      title: "Untitled",
+    });
+    expect(created.workspace.notebooks).toHaveLength(4);
+    expect(base.notebooks).toHaveLength(3);
+
+    const copied = duplicateNotebook(
+      created.workspace,
+      base.notebooks[0],
+      "copy-id"
+    );
+    expect(copied.notebook.title).toBe(`${base.notebooks[0].title} copy`);
+    expect(copied.notebook.blocks).toEqual(base.notebooks[0].blocks);
+    expect(copied.notebook.blocks).not.toBe(base.notebooks[0].blocks);
+
+    const renamed = renameNotebook(copied.workspace, "copy-id", "  ");
+    expect(renamed.notebooks.at(-1)?.title).toBe(copied.notebook.title);
+
+    const deleted = deleteNotebook(renamed, "new-id");
+    expect(deleted.notebooks.map((notebook) => notebook.id)).not.toContain(
+      "new-id"
+    );
+  });
+
+  it("stamps updatedAt only on the notebook that changed", () => {
+    const base = seededWorkspace();
+    const stale = "2000-01-01T00:00:00.000Z";
+    const frozen = {
+      ...base,
+      notebooks: base.notebooks.map((notebook) => ({
+        ...notebook,
+        updatedAt: stale,
+      })),
+    };
+    const [first, second] = frozen.notebooks;
+    const withBlocks = replaceNotebookBlocks(frozen, first.id, [
+      { id: "h", text: "Hi", type: "heading" },
+    ]);
+    expect(withBlocks.notebooks[0].updatedAt).not.toBe(stale);
+    expect(withBlocks.notebooks[1].updatedAt).toBe(stale);
+
+    const withScenarios = setNotebookScenarios(frozen, second.id, [
+      { id: "s", name: "S", values: {} },
+    ]);
+    expect(withScenarios.notebooks[1].scenarios).toHaveLength(1);
+    expect(withScenarios.notebooks[0].scenarios).toEqual([]);
   });
 });

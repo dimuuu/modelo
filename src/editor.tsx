@@ -10,7 +10,6 @@ import {
 import { XIcon } from "lucide-react";
 import { createContext, useContext, useId } from "react";
 import { toast } from "sonner";
-import { z } from "zod";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,29 +28,35 @@ import {
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 
-import { renameVariable } from "./engine/rename";
 import { CURRENCIES, UNIT_GROUPS, UNITS } from "./engine/units";
+import {
+  clampSliderValue,
+  DECIMALS_AUTO,
+  DECIMALS_MAX,
+  FORMULA_PROP_DEFAULTS,
+  INPUT_PROP_DEFAULTS,
+  parseSelectOptions,
+  serializeSelectOptions,
+} from "./engine/variable";
+import type { SelectOption } from "./engine/variable";
 import type { EvaluationResult } from "./model";
+import { createBlockNotePort } from "./notebook/blocknote-port";
+import { renameVariableIn, setBlockProps } from "./notebook/mutations";
 
 const ModelContext = createContext<EvaluationResult | null>(null);
 export const ModelProvider = ModelContext.Provider;
 
-type SelectOption = z.infer<typeof selectOptionSchema>;
-type ModelKind = "number" | "slider" | "select" | "boolean" | "formula";
-
-const DECIMALS_AUTO = -1;
-const DECIMALS_MAX = 8;
-
+/** BlockNote prop schema for every input block, derived from the shared defaults. */
 const sharedProps = {
-  currency: { default: "EUR" },
-  decimals: { default: DECIMALS_AUTO },
-  format: { default: "number" },
-  label: { default: "Variable" },
-  locale: { default: "" },
-  name: { default: "variable" },
-  unit: { default: "" },
-  value: { default: 0 },
-  varId: { default: "" },
+  currency: { default: INPUT_PROP_DEFAULTS.currency as string },
+  decimals: { default: INPUT_PROP_DEFAULTS.decimals as number },
+  format: { default: INPUT_PROP_DEFAULTS.format as string },
+  label: { default: INPUT_PROP_DEFAULTS.label as string },
+  locale: { default: INPUT_PROP_DEFAULTS.locale as string },
+  name: { default: INPUT_PROP_DEFAULTS.name as string },
+  unit: { default: INPUT_PROP_DEFAULTS.unit as string },
+  value: { default: INPUT_PROP_DEFAULTS.value as number },
+  varId: { default: INPUT_PROP_DEFAULTS.varId as string },
 };
 
 const FORMAT_OPTIONS = [
@@ -61,40 +66,41 @@ const FORMAT_OPTIONS = [
   { label: "Unit", value: "unit" },
 ];
 
-const selectOptionSchema = z.object({
-  label: z.string(),
-  value: z.number().finite(),
-});
-
-/** Reads the `options` JSON prop, dropping any entry that is not well formed. */
-export function parseSelectOptions(value: string): SelectOption[] {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(value);
-  } catch {
-    return [];
-  }
-  if (!Array.isArray(parsed)) {
-    return [];
-  }
-  return parsed.flatMap((option) => {
-    const result = selectOptionSchema.safeParse(option);
-    return result.success ? [result.data] : [];
-  });
+/**
+ * The props a model block carries. Every input block has the shared fields;
+ * bounds, options, and formula are present only on the blocks that use them.
+ */
+interface ModelBlockProps {
+  varId: string;
+  name: string;
+  label: string;
+  value?: number;
+  format?: string;
+  currency?: string;
+  unit?: string;
+  decimals?: number;
+  locale?: string;
+  min?: number;
+  max?: number;
+  step?: number;
+  options?: string;
+  formula?: string;
 }
 
-export function clampSliderValue(
-  value: number,
-  min: number,
-  max: number
-): number {
-  const low = Math.min(min, max);
-  const high = Math.max(min, max);
-  return Math.min(high, Math.max(low, value));
+/** What a block component needs: the block's identity and props, and the editor to write through. */
+interface ModelBlockFields {
+  block: { id: string; type: string; props: ModelBlockProps };
+  // The editor is only handed to the port, so its BlockNote generics stay opaque.
+  editor: unknown;
 }
 
-function updateProps(editor: any, block: any, props: Record<string, unknown>) {
-  editor.transact(() => editor.updateBlock(block, { props }));
+/** Every control writes through the shared mutation, never the raw editor. */
+function updateProps(
+  editor: unknown,
+  block: ModelBlockFields["block"],
+  props: Record<string, unknown>
+) {
+  setBlockProps(createBlockNotePort(editor), block.id, props);
 }
 
 /** One captioned control in a model block's configuration row. */
@@ -160,7 +166,7 @@ function Value({
   );
 }
 
-function VariableName({ block, editor }: any) {
+function VariableName({ block, editor }: ModelBlockFields) {
   return (
     <Input
       aria-label="Variable name"
@@ -172,13 +178,10 @@ function VariableName({ block, editor }: any) {
           return;
         }
         try {
-          const renamed = renameVariable(
-            editor.document as any,
+          renameVariableIn(
+            createBlockNotePort(editor),
             block.props.varId,
             nextName
-          );
-          editor.transact(() =>
-            editor.replaceBlocks(editor.document as any, renamed as any)
           );
         } catch (error) {
           event.currentTarget.value = block.props.name;
@@ -192,7 +195,7 @@ function VariableName({ block, editor }: any) {
 }
 
 /** The bold caption and the editable variable name shown above every control. */
-function BlockHeader({ block, editor }: any) {
+function BlockHeader({ block, editor }: ModelBlockFields) {
   return (
     <div className="flex items-center justify-between gap-3">
       <strong className="truncate text-sm font-semibold">
@@ -203,7 +206,7 @@ function BlockHeader({ block, editor }: any) {
   );
 }
 
-function LabelField({ block, editor }: any) {
+function LabelField({ block, editor }: ModelBlockFields) {
   return (
     <Field caption="Label">
       {(id) => (
@@ -221,13 +224,19 @@ function LabelField({ block, editor }: any) {
   );
 }
 
-function FormatFields({ block, editor, includeStep = false }: any) {
+function FormatFields({
+  block,
+  editor,
+  includeStep = false,
+}: ModelBlockFields & { includeStep?: boolean }) {
   const set = (props: Record<string, unknown>) =>
     updateProps(editor, block, props);
   const unknownCurrency =
     block.props.currency &&
     !CURRENCIES.includes(block.props.currency as (typeof CURRENCIES)[number]);
-  const unknownUnit = block.props.unit && !UNITS.includes(block.props.unit);
+  const unknownUnit =
+    block.props.unit &&
+    !(UNITS as readonly string[]).includes(block.props.unit);
   const currencies = unknownCurrency
     ? [block.props.currency, ...CURRENCIES]
     : [...CURRENCIES];
@@ -340,7 +349,11 @@ function FormatFields({ block, editor, includeStep = false }: any) {
             }}
             placeholder="Auto"
             type="number"
-            value={block.props.decimals < 0 ? "" : block.props.decimals}
+            value={
+              (block.props.decimals ?? DECIMALS_AUTO) < 0
+                ? ""
+                : block.props.decimals
+            }
           />
         )}
       </Field>
@@ -364,7 +377,8 @@ function FormatFields({ block, editor, includeStep = false }: any) {
   );
 }
 
-function SliderFields({ block, editor }: any) {
+function SliderFields({ block, editor }: ModelBlockFields) {
+  const { min = 0, max = 0, value = 0 } = block.props;
   const setBound = (key: "min" | "max" | "step", raw: string) => {
     const next = Number(raw);
     if (!Number.isFinite(next)) {
@@ -374,14 +388,12 @@ function SliderFields({ block, editor }: any) {
       updateProps(editor, block, { step: next });
       return;
     }
-    const min =
-      key === "min" ? Math.min(next, block.props.max) : block.props.min;
-    const max =
-      key === "max" ? Math.max(next, block.props.min) : block.props.max;
+    const nextMin = key === "min" ? Math.min(next, max) : min;
+    const nextMax = key === "max" ? Math.max(next, min) : max;
     updateProps(editor, block, {
-      max,
-      min,
-      value: clampSliderValue(block.props.value, min, max),
+      max: nextMax,
+      min: nextMin,
+      value: clampSliderValue(value, nextMin, nextMax),
     });
   };
   const bounds = [
@@ -411,14 +423,17 @@ function SliderFields({ block, editor }: any) {
   );
 }
 
-function SelectOptions({ block, editor }: any) {
+function SelectOptions({ block, editor }: ModelBlockFields) {
   const options = parseSelectOptions(block.props.options);
   const save = (next: SelectOption[]) => {
     const safe = next.length ? next : [{ label: "Option", value: 0 }];
     const value = safe.some((option) => option.value === block.props.value)
       ? block.props.value
       : safe[0].value;
-    updateProps(editor, block, { options: JSON.stringify(safe), value });
+    updateProps(editor, block, {
+      options: serializeSelectOptions(safe),
+      value,
+    });
   };
   const edit = (index: number, patch: Partial<SelectOption>) =>
     save(
@@ -668,10 +683,10 @@ const FormulaBlock = createReactBlockSpec(
   {
     content: "none",
     propSchema: {
-      formula: { default: "1 + 1" },
-      label: { default: "Formula" },
-      name: { default: "result" },
-      varId: { default: "" },
+      formula: { default: FORMULA_PROP_DEFAULTS.formula as string },
+      label: { default: FORMULA_PROP_DEFAULTS.label as string },
+      name: { default: FORMULA_PROP_DEFAULTS.name as string },
+      varId: { default: FORMULA_PROP_DEFAULTS.varId as string },
     },
     type: "formula",
   },
@@ -746,30 +761,3 @@ export const modeloSchema = BlockNoteSchema.create({
   },
 });
 export type ModeloEditor = typeof modeloSchema.BlockNoteEditor;
-
-export function newVariableProps(kind: ModelKind) {
-  const id = crypto.randomUUID();
-  const base = {
-    label:
-      kind === "boolean" ? "Toggle" : kind[0].toUpperCase() + kind.slice(1),
-    name: `variable_${id.slice(0, 4)}`,
-    varId: id,
-  };
-  if (kind === "slider") {
-    return { ...base, max: 100, min: 0, step: 1, value: 50 };
-  }
-  if (kind === "select") {
-    return {
-      ...base,
-      options: '[{"label":"No","value":0},{"label":"Yes","value":1}]',
-      value: 0,
-    };
-  }
-  if (kind === "boolean") {
-    return { ...base, value: 0 };
-  }
-  if (kind === "formula") {
-    return { ...base, formula: "1 + 1", name: `result_${id.slice(0, 4)}` };
-  }
-  return { ...base, step: 1, value: 0 };
-}

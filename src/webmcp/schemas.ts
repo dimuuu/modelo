@@ -1,53 +1,19 @@
 import { z } from "zod";
 
-import { CURRENCIES, UNITS } from "../engine/units";
+import { updateBlockSchema } from "../engine/block-update";
+import { PROSE_BLOCK_TYPES } from "../engine/document";
+import { inputFields, placementSchema, sectionSchema } from "../engine/section";
+import { expressionSchema, variableNameSchema } from "../engine/variable";
 
 /**
- * Every WebMCP tool argument shape, declared once.
- *
- * These schemas are the single source of truth for three things: the JSON
- * Schema published to the agent, the TypeScript type the adapter receives, and
- * the runtime check that rejects malformed arguments before they reach the
- * BlockNote document.
+ * Every WebMCP tool argument shape, composed here from the engine's own
+ * schemas and published as JSON Schema. The tool table in `tools.ts` pairs
+ * each schema with its implementation; `z.infer` gives the handler its type.
  */
 
-const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/u;
-const NON_BLANK = /\S/u;
-const DECIMALS_MIN = 0;
-const DECIMALS_MAX = 8;
 const HEADING_LEVELS = [1, 2, 3] as const;
-
-const variableName = z.string().regex(IDENTIFIER);
 const blockId = z.string().min(1);
-const label = z.string().min(1);
-const decimals = z.number().int().min(DECIMALS_MIN).max(DECIMALS_MAX);
-const expression = z.string().min(1).regex(NON_BLANK);
 const headingLevel = z.union(HEADING_LEVELS.map((level) => z.literal(level)));
-const format = z.enum(["number", "currency", "percent", "unit"]);
-const currency = z.enum(CURRENCIES);
-const unit = z.enum(UNITS);
-const placement = z.enum(["before", "after"]);
-const selectOption = z.strictObject({ label: z.string(), value: z.number() });
-
-/** Display fields shared by every input block and by write_section inputs. */
-const displayFields = {
-  currency: currency.optional(),
-  decimals: decimals.optional(),
-  format: format.optional(),
-  label: label.optional(),
-  unit: unit.optional(),
-};
-
-/** Display fields plus the bounds and options an input block may carry. */
-const inputFields = {
-  ...displayFields,
-  max: z.number().optional(),
-  min: z.number().optional(),
-  name: variableName,
-  options: z.array(selectOption).optional(),
-  step: z.number().optional(),
-  value: z.number(),
-};
 
 // --- Workspace tools -------------------------------------------------------
 
@@ -88,12 +54,12 @@ export const getModelSchema = z.strictObject({
 
 /** A variable is addressed by name or by stable id, never by both. */
 export const variableSelectorSchema = z.union([
-  z.strictObject({ name: variableName }),
+  z.strictObject({ name: variableNameSchema }),
   z.strictObject({ varId: blockId }),
 ]);
 
 export const removeVariableSchema = z.union([
-  z.strictObject({ force: z.boolean().optional(), name: variableName }),
+  z.strictObject({ force: z.boolean().optional(), name: variableNameSchema }),
   z.strictObject({ force: z.boolean().optional(), varId: blockId }),
 ]);
 
@@ -109,6 +75,8 @@ const inputBlockSchemas = (
   })
 );
 
+const proseTypes = PROSE_BLOCK_TYPES.filter((type) => type !== "heading");
+
 export const notebookBlockSchema = z.union([
   z.strictObject({
     id: z.string().optional(),
@@ -118,119 +86,39 @@ export const notebookBlockSchema = z.union([
   }),
   z.strictObject({
     id: z.string().optional(),
-    text: z.string(),
-    type: z.literal("paragraph"),
-  }),
-  z.strictObject({
-    id: z.string().optional(),
-    text: z.string(),
-    type: z.literal("bullet"),
+    text: z.string().describe("Plain text. @name inserts a live value."),
+    type: z.enum(proseTypes as [string, ...string[]]),
   }),
   ...inputBlockSchemas,
   z.strictObject({
-    formula: expression,
+    formula: expressionSchema,
     id: z.string().optional(),
-    label: label.optional(),
-    name: variableName,
+    label: z.string().min(1).optional(),
+    name: variableNameSchema,
     type: z.literal("formula"),
   }),
 ]);
 
 export const insertBlocksSchema = z.strictObject({
   blocks: z.array(notebookBlockSchema).min(1),
-  placement: placement.optional(),
+  placement: placementSchema.optional(),
   referenceBlockId: blockId.optional(),
 });
 
 // --- write_section ---------------------------------------------------------
 
-const sectionInputSchema = z.strictObject({
-  ...displayFields,
-  kind: z.enum(["number", "slider", "select", "boolean"]),
-  max: z.number().optional(),
-  min: z.number().optional(),
-  name: variableName,
-  options: z.array(selectOption).optional(),
-  step: z.number().optional(),
-  value: z.number(),
-});
+const dryRun = z.boolean().optional().describe("Preview without writing.");
 
-const sectionFormulaSchema = z.strictObject({
-  formula: expression,
-  label: label.optional(),
-  name: variableName,
-});
-
-const sectionFields = {
-  body: z
-    .string()
-    .min(1)
-    .regex(NON_BLANK)
-    .describe(
-      "One to three short paragraphs. Newlines start paragraphs; @name inserts a live value."
-    ),
-  formulas: z
-    .array(sectionFormulaSchema)
-    .optional()
-    .describe("Named formulas whose result is reused later."),
-  heading: z.string().min(1).describe("Section title."),
-  inputs: z
-    .array(sectionInputSchema)
-    .optional()
-    .describe("Assumptions the reader will change."),
-  placement: placement
-    .optional()
-    .describe("Position relative to referenceBlockId; defaults to after."),
-  referenceBlockId: blockId
-    .optional()
-    .describe(
-      "Existing block id used as the insertion anchor. Omit to append."
-    ),
-};
-
-export const writeSectionSchema = z.strictObject({
-  ...sectionFields,
-  dry_run: z.boolean().optional().describe("Preview without writing."),
-});
+export const writeSectionSchema = sectionSchema.extend({ dry_run: dryRun });
 
 export const writeSectionsSchema = z.strictObject({
-  dry_run: z.boolean().optional().describe("Preview without writing."),
-  sections: z.array(z.strictObject(sectionFields)).min(1),
+  dry_run: dryRun,
+  sections: z.array(sectionSchema).min(1),
 });
 
 // --- update_block ----------------------------------------------------------
 
-const namedValueFields = {
-  id: blockId,
-  label: label.optional(),
-  name: variableName.optional(),
-  value: z.number().optional(),
-};
-
-export const updateBlockSchema = z.union([
-  z.strictObject({ formula: expression, id: blockId }),
-  z.strictObject({
-    id: blockId,
-    level: headingLevel.optional(),
-    text: z.string(),
-  }),
-  z.strictObject({ id: blockId, level: headingLevel }),
-  z.strictObject({
-    ...namedValueFields,
-    currency: currency.optional(),
-    decimals: decimals.optional(),
-    format: format.optional(),
-    max: z.number().optional(),
-    min: z.number().optional(),
-    step: z.number().optional(),
-    unit: unit.optional(),
-  }),
-  z.strictObject({
-    ...namedValueFields,
-    options: z.array(selectOption).optional(),
-  }),
-  z.strictObject(namedValueFields),
-]);
+export { updateBlockSchema } from "../engine/block-update";
 
 export const updateBlocksSchema = z.strictObject({
   blocks: z.array(updateBlockSchema).min(1),
@@ -244,24 +132,28 @@ export const removeBlocksSchema = z.strictObject({
 
 export const replaceParagraphSchema = z.strictObject({
   id: blockId.describe("Paragraph block id."),
-  text: z.string().describe("Replacement plain text."),
+  text: z
+    .string()
+    .describe("Replacement plain text. @name inserts a live value."),
 });
 
 export const insertInlineRefSchema = z.strictObject({
   blockId: blockId.describe("Paragraph block id."),
-  label: label.optional().describe("Optional displayed label."),
+  label: z.string().min(1).optional().describe("Optional displayed label."),
   offset: z
     .number()
     .int()
     .min(0)
     .optional()
-    .describe("Optional UTF-16 insertion offset; omit to append."),
+    .describe(
+      "Optional UTF-16 offset into the block's plain text, as get_document reports it; omit to append."
+    ),
   variable: z.string().min(1).describe("Variable name to reference."),
 });
 
 export const setVariableSchema = z.strictObject({
   name: z.string().min(1).describe("Variable name."),
-  value: z.number().describe("New finite numeric variable value."),
+  value: z.number().finite().describe("New finite numeric variable value."),
 });
 
 // --- Scenario tools --------------------------------------------------------
@@ -278,32 +170,8 @@ export const saveScenarioSchema = z.strictObject({
     .describe("Optional values keyed by input name."),
 });
 
-// --- Inferred argument types ------------------------------------------------
-
-export type WorkspaceOpenArgs = z.infer<typeof workspaceOpenSchema>;
-export type WorkspaceCreateArgs = z.infer<typeof workspaceCreateSchema>;
-export type WorkspaceDuplicateArgs = z.infer<typeof workspaceDuplicateSchema>;
-export type WorkspaceDeleteArgs = z.infer<typeof workspaceDeleteSchema>;
-export type WorkspaceRenameArgs = z.infer<typeof workspaceRenameSchema>;
-
 export type NotebookBlock = z.infer<typeof notebookBlockSchema>;
-export type NotebookGetModelArgs = z.infer<typeof getModelSchema>;
-export type NotebookInsertBlocksArgs = z.infer<typeof insertBlocksSchema>;
-export type NotebookWriteSectionArgs = z.infer<typeof writeSectionSchema>;
-export type NotebookWriteSectionsArgs = z.infer<typeof writeSectionsSchema>;
-export type NotebookUpdateBlockArgs = z.infer<typeof updateBlockSchema>;
-export type NotebookUpdateBlocksArgs = z.infer<typeof updateBlocksSchema>;
-export type NotebookRemoveBlocksArgs = z.infer<typeof removeBlocksSchema>;
 export type NotebookVariableSelector = z.infer<typeof variableSelectorSchema>;
-export type NotebookFindReferencesArgs = NotebookVariableSelector;
-export type NotebookRemoveVariableArgs = z.infer<typeof removeVariableSchema>;
-export type NotebookReplaceParagraphArgs = z.infer<
-  typeof replaceParagraphSchema
->;
-export type NotebookInsertInlineRefArgs = z.infer<typeof insertInlineRefSchema>;
-export type NotebookSetVariableArgs = z.infer<typeof setVariableSchema>;
-export type NotebookSaveScenarioArgs = z.infer<typeof saveScenarioSchema>;
-export type NotebookScenarioArgs = z.infer<typeof scenarioNameSchema>;
 
 /** Renders a schema as the JSON Schema the WebMCP registration publishes. */
 export function toInputSchema(schema: z.ZodType): object {

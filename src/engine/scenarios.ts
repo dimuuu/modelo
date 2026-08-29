@@ -1,24 +1,10 @@
 import { z } from "zod";
 
-import type { ModeloBlock, ModeloDocument } from "../model";
-
-/** Boolean inputs persist as 0 or 1, every other input keeps its number. */
-function inputValue(type: string, value: number): number {
-  if (type !== "boolean") {
-    return value;
-  }
-  return value ? 1 : 0;
-}
+import type { ModeloDocument } from "../model";
+import { isInputBlockType, mapBlocks, walkBlocks } from "./document";
+import { coerceInputValue } from "./variable";
 
 export const MAX_SCENARIOS = 8;
-export const SCENARIO_INPUT_TYPES = new Set([
-  "modelVariable",
-  "variable",
-  "number",
-  "slider",
-  "select",
-  "boolean",
-]);
 
 export const scenarioSchema = z.object({
   id: z.string(),
@@ -28,26 +14,15 @@ export const scenarioSchema = z.object({
 
 export type Scenario = z.infer<typeof scenarioSchema>;
 
-function visitInputs(
-  blocks: ModeloDocument,
-  visitor: (block: ModeloBlock) => void
-): void {
-  for (const block of blocks) {
-    if (SCENARIO_INPUT_TYPES.has(block.type)) {
-      visitor(block);
-    }
-    if (Array.isArray(block.children)) {
-      visitInputs(block.children as ModeloDocument, visitor);
-    }
-  }
-}
-
 /** Capture finite input values by stable varId. Formula blocks are never included. */
 export function snapshotInputs(
   document: ModeloDocument
 ): Record<string, number> {
   const values: Record<string, number> = Object.create(null);
-  visitInputs(document, (block) => {
+  walkBlocks(document, (block) => {
+    if (!isInputBlockType(block.type)) {
+      return;
+    }
     const props = block.props as Record<string, unknown> | undefined;
     const varId = props?.varId;
     const value = props?.value;
@@ -57,7 +32,7 @@ export function snapshotInputs(
       typeof value === "number" &&
       Number.isFinite(value)
     ) {
-      values[varId] = inputValue(block.type, value);
+      values[varId] = coerceInputValue(block.type, value);
     }
   });
   return values;
@@ -68,34 +43,22 @@ export function applyScenarioValues(
   document: ModeloDocument,
   values: Record<string, number>
 ): ModeloDocument {
-  const apply = (blocks: ModeloDocument): ModeloDocument =>
-    blocks.map((block) => {
-      const children = Array.isArray(block.children)
-        ? apply(block.children as ModeloDocument)
-        : block.children;
-      const props = block.props as Record<string, unknown> | undefined;
-      const varId = props?.varId;
-      const requested = typeof varId === "string" ? values[varId] : undefined;
-      if (
-        !SCENARIO_INPUT_TYPES.has(block.type) ||
-        typeof requested !== "number" ||
-        !Number.isFinite(requested)
-      ) {
-        return {
-          ...block,
-          ...(Array.isArray(block.children) ? { children } : {}),
-        } as ModeloBlock;
-      }
-      return {
-        ...block,
-        props: {
-          ...block.props,
-          value: inputValue(block.type, requested),
-        },
-        ...(Array.isArray(block.children) ? { children } : {}),
-      } as ModeloBlock;
-    });
-  return apply(document);
+  return mapBlocks(document, (block) => {
+    const props = block.props as Record<string, unknown> | undefined;
+    const varId = props?.varId;
+    const requested = typeof varId === "string" ? values[varId] : undefined;
+    if (
+      !isInputBlockType(block.type) ||
+      typeof requested !== "number" ||
+      !Number.isFinite(requested)
+    ) {
+      return block;
+    }
+    return {
+      ...block,
+      props: { ...props, value: coerceInputValue(block.type, requested) },
+    };
+  });
 }
 
 /** Replace a same-named scenario, or append a new one while enforcing the notebook cap. */

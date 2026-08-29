@@ -8,8 +8,12 @@ import {
   upsertScenario,
 } from "../src/engine/scenarios";
 import type { Scenario } from "../src/engine/scenarios";
+import type { ModeloBlock, ModeloDocument } from "../src/model";
 
-const document = [
+const valueOf = (block: ModeloBlock | undefined) =>
+  (block?.props as { value?: number } | undefined)?.value;
+
+const document: ModeloDocument = [
   { id: "n", props: { name: "n", value: 10, varId: "n-id" }, type: "number" },
   {
     id: "f",
@@ -27,7 +31,7 @@ const document = [
     id: "group",
     type: "paragraph",
   },
-] as any;
+];
 
 describe("notebook scenarios", () => {
   it("snapshots only finite input values by stable varId, including nested blocks", () => {
@@ -41,10 +45,10 @@ describe("notebook scenarios", () => {
       missing: 3,
       "n-id": 20,
     });
-    expect((next[0] as any).props.value).toBe(20);
-    expect((next[1] as any).props.value).toBeUndefined();
-    expect((next[2] as any).children[0].props.value).toBe(0);
-    expect((document[0] as any).props.value).toBe(10);
+    expect(valueOf(next[0])).toBe(20);
+    expect(valueOf(next[1])).toBeUndefined();
+    expect(valueOf(next[2].children?.[0])).toBe(0);
+    expect(valueOf(document[0])).toBe(10);
   });
 
   it("replaces same-name scenarios, removes by name, and caps new scenarios at eight", () => {

@@ -1,39 +1,41 @@
 import { z } from "zod";
 
 import seeds from "./data/seeds.json";
+import { portableBlockSchema } from "./engine/portable";
+import type { PortableBlock } from "./engine/portable";
 import { scenarioSchema } from "./engine/scenarios";
-import { inlineContentFromText } from "./engine/section";
+import type { Scenario } from "./engine/scenarios";
+
+/**
+ * The workspace catalogue: which notebooks exist, and how they persist.
+ *
+ * Every catalogue change is a pure function from one `Workspace` to the next.
+ * React state holds the current value and the id of the open notebook, and
+ * nothing else.
+ */
 
 export const STORAGE_KEY = "modelo.workspace.v1";
 export const DEFAULT_CURRENCY = "EUR";
 export const DEFAULT_LOCALE = "es-ES";
 
-export const notebookSchema = z.object({
-  blocks: z.array(z.unknown()),
+export const notebookRecordSchema = z.object({
+  blocks: z.array(portableBlockSchema),
   description: z.string().optional(),
   id: z.string(),
-  scenarios: z.array(scenarioSchema).optional(),
+  scenarios: z.array(scenarioSchema),
   title: z.string(),
   updatedAt: z.string(),
 });
 
-/**
- * The persisted workspace. Display defaults are optional here and filled in by
- * parseWorkspace, so an older v1 snapshot loads without a storage-key
- * migration.
- */
 export const workspaceSchema = z.object({
-  currency: z.string().min(1).optional(),
-  locale: z.string().min(1).optional(),
-  notebooks: z.array(notebookSchema),
+  currency: z.string().min(1),
+  locale: z.string().min(1),
+  notebooks: z.array(notebookRecordSchema),
   version: z.literal(1),
 });
 
-export type Notebook = z.infer<typeof notebookSchema>;
-export type Workspace = Omit<
-  z.infer<typeof workspaceSchema>,
-  "currency" | "locale"
-> & { currency: string; locale: string };
+export type NotebookRecord = z.infer<typeof notebookRecordSchema>;
+export type Workspace = z.infer<typeof workspaceSchema>;
 
 const now = () => new Date().toISOString();
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value));
@@ -42,11 +44,9 @@ export function seededWorkspace(): Workspace {
   return {
     currency: DEFAULT_CURRENCY,
     locale: DEFAULT_LOCALE,
-    notebooks: clone(seeds).map((seed) => ({
-      ...seed,
-      scenarios: [],
-      updatedAt: now(),
-    })),
+    notebooks: (
+      clone(seeds) as Omit<NotebookRecord, "scenarios" | "updatedAt">[]
+    ).map((seed) => ({ ...seed, scenarios: [], updatedAt: now() })),
     version: 1,
   };
 }
@@ -66,18 +66,7 @@ export function parseWorkspace(source: string | unknown): Workspace | null {
     }
   }
   const result = workspaceSchema.safeParse(value);
-  if (!result.success) {
-    return null;
-  }
-  return {
-    ...result.data,
-    currency: result.data.currency ?? DEFAULT_CURRENCY,
-    locale: result.data.locale ?? DEFAULT_LOCALE,
-    notebooks: result.data.notebooks.map((notebook) => ({
-      ...notebook,
-      scenarios: notebook.scenarios ?? [],
-    })),
-  };
+  return result.success ? result.data : null;
 }
 
 export function loadWorkspace(
@@ -87,80 +76,105 @@ export function loadWorkspace(
   if (!saved) {
     return seededWorkspace();
   }
-  const parsed = parseWorkspace(saved);
-  return parsed ?? seededWorkspace();
+  return parseWorkspace(saved) ?? seededWorkspace();
 }
 
 export function saveWorkspace(
   workspace: Workspace,
   storage: Pick<Storage, "setItem"> = localStorage
-) {
+): void {
   storage.setItem(STORAGE_KEY, JSON.stringify(workspace));
 }
 
-const modelKeys = new Set([
-  "name",
-  "value",
-  "label",
-  "min",
-  "max",
-  "step",
-  "unit",
-  "currency",
-  "options",
-  "formula",
-  "decimals",
-  "format",
-  "locale",
-  "varId",
-]);
+// --- Catalogue reducers ------------------------------------------------------
 
-export function portableToEditorBlocks(
-  blocks: any[],
-  idByName: Record<string, string> = {}
-): any[] {
-  return blocks.map((block) => {
-    if (
-      ["number", "slider", "select", "boolean", "formula"].includes(block.type)
-    ) {
-      const props = { ...block.props };
-      for (const key of modelKeys) {
-        if (block[key] !== undefined && props[key] === undefined) {
-          props[key] = block[key];
-        }
-      }
-      if (Array.isArray(props.options)) {
-        props.options = JSON.stringify(props.options);
-      }
-      return { id: block.id, props, type: block.type };
-    }
-    const type = block.type === "bullet" ? "bulletListItem" : block.type;
-    const level = type === "heading" ? Number(block.level ?? 2) : undefined;
-    let content: any = block.text ?? "";
-    if (Array.isArray(block.inline)) {
-      content = block.inline.map((item: any) =>
-        typeof item === "string"
-          ? { styles: {}, text: item, type: "text" }
-          : {
-              props: { label: item.label ?? "", varId: item.varId },
-              type: "variableRef",
-            }
-      );
-    } else if (type === "paragraph" && typeof block.text === "string") {
-      content = inlineContentFromText(block.text, idByName).map((item) =>
-        typeof item === "string"
-          ? { styles: {}, text: item, type: "text" }
-          : {
-              props: { label: item.label, varId: item.varId },
-              type: "variableRef",
-            }
-      );
-    }
-    return {
-      id: block.id,
-      type,
-      ...(level ? { props: { level } } : {}),
-      content,
-    };
-  });
+export function findNotebook(
+  workspace: Workspace,
+  id: string | null
+): NotebookRecord | undefined {
+  return workspace.notebooks.find((notebook) => notebook.id === id);
+}
+
+function replaceNotebook(
+  workspace: Workspace,
+  id: string,
+  change: (notebook: NotebookRecord) => Partial<NotebookRecord>
+): Workspace {
+  return {
+    ...workspace,
+    notebooks: workspace.notebooks.map((notebook) =>
+      notebook.id === id
+        ? { ...notebook, ...change(notebook), updatedAt: now() }
+        : notebook
+    ),
+  };
+}
+
+export function createNotebook(
+  workspace: Workspace,
+  title: string,
+  id: string
+): { workspace: Workspace; notebook: NotebookRecord } {
+  const notebook: NotebookRecord = {
+    blocks: [],
+    id,
+    scenarios: [],
+    title: title.trim() || "Untitled",
+    updatedAt: now(),
+  };
+  return {
+    notebook,
+    workspace: { ...workspace, notebooks: [...workspace.notebooks, notebook] },
+  };
+}
+
+export function deleteNotebook(workspace: Workspace, id: string): Workspace {
+  return {
+    ...workspace,
+    notebooks: workspace.notebooks.filter((notebook) => notebook.id !== id),
+  };
+}
+
+export function duplicateNotebook(
+  workspace: Workspace,
+  source: NotebookRecord,
+  id: string,
+  title?: string
+): { workspace: Workspace; notebook: NotebookRecord } {
+  const notebook: NotebookRecord = {
+    ...clone(source),
+    id,
+    title: title ?? `${source.title} copy`,
+    updatedAt: now(),
+  };
+  return {
+    notebook,
+    workspace: { ...workspace, notebooks: [...workspace.notebooks, notebook] },
+  };
+}
+
+export function renameNotebook(
+  workspace: Workspace,
+  id: string,
+  title: string
+): Workspace {
+  return replaceNotebook(workspace, id, (notebook) => ({
+    title: title.trim() || notebook.title,
+  }));
+}
+
+export function replaceNotebookBlocks(
+  workspace: Workspace,
+  id: string,
+  blocks: PortableBlock[]
+): Workspace {
+  return replaceNotebook(workspace, id, () => ({ blocks }));
+}
+
+export function setNotebookScenarios(
+  workspace: Workspace,
+  id: string,
+  scenarios: Scenario[]
+): Workspace {
+  return replaceNotebook(workspace, id, () => ({ scenarios }));
 }

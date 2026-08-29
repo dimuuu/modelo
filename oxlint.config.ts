@@ -12,22 +12,13 @@ export default defineConfig({
     "src/lib/utils.ts",
   ],
   rules: {
-    // Tracked cleanup, not accepted style. Three evaluation and serialisation
-    // functions exceed the branch budget; see DECISIONS.md.
-    complexity: "warn",
-    // The engine uses hoisted `function` declarations, including recursive
-    // document visitors that are called before their definition.
+    // The engine uses hoisted `function` declarations.
     "func-style": "off",
     // The three model validation errors belong together in projector.ts.
     "max-classes-per-file": "off",
-    // src/engine/index.ts is the engine's deliberate public surface.
-    "oxc/no-barrel-file": "off",
     // React components follow the same `function` convention as the engine,
     // as shadcn's own generated components do.
     "react/function-component-definition": "off",
-    // Tracked cleanup. React Compiler cannot lower `throw` inside try/catch,
-    // which the WebMCP tool error contract relies on.
-    "react/todo": "warn",
     // Tracked cleanup. BlockNote's editor and block API is not usefully typed
     // at this boundary. Warn so new `any` still stands out.
     "typescript/no-explicit-any": "warn",

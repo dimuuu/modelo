@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { findReferences, getModelSummary } from "../src/engine";
+import { getModelSummary } from "../src/engine/model-summary";
+import { findReferences } from "../src/engine/references";
+import type { ModeloDocument } from "../src/model";
 
-const referencedDocument = [
+const referencedDocument: ModeloDocument = [
   {
     id: "number",
     props: {
@@ -59,11 +61,11 @@ const referencedDocument = [
     id: "container",
     type: "bulletListItem",
   },
-] as const;
+];
 
 describe("get_model summary", () => {
   it("returns slim fields and only format-matching metadata by default", () => {
-    const summary = getModelSummary(referencedDocument as any, {
+    const summary = getModelSummary(referencedDocument, {
       locale: "en-US",
     });
     expect(summary[0]).toEqual({
@@ -98,7 +100,7 @@ describe("get_model summary", () => {
 
   it("adds usedBy only when dependencies are requested", () => {
     const summary = getModelSummary(
-      referencedDocument as any,
+      referencedDocument,
       {},
       { includeDependencies: true }
     );
@@ -113,17 +115,13 @@ describe("get_model summary", () => {
 
 describe("findReferences", () => {
   it("finds exact formula and nested paragraph block IDs by name or varId", () => {
-    expect(
-      findReferences(referencedDocument as any, { name: "revenue" })
-    ).toEqual({
+    expect(findReferences(referencedDocument, { name: "revenue" })).toEqual({
       formulas: ["formula"],
       name: "revenue",
       paragraphs: ["paragraph", "nested"],
       varId: "revenue-id",
     });
-    expect(
-      findReferences(referencedDocument as any, { varId: "growth-id" })
-    ).toEqual({
+    expect(findReferences(referencedDocument, { varId: "growth-id" })).toEqual({
       formulas: ["prefix-formula"],
       name: "revenue_growth",
       paragraphs: [],
@@ -133,7 +131,7 @@ describe("findReferences", () => {
 
   it("rejects unknown variables", () => {
     expect(() =>
-      findReferences(referencedDocument as any, { name: "missing" })
+      findReferences(referencedDocument, { name: "missing" })
     ).toThrow(/Variable not found/u);
   });
 });

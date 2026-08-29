@@ -45,14 +45,14 @@ export interface FormulaProps {
 
 export interface VariableBlock {
   id: string;
-  type: "modelVariable" | "variable";
+  type: "number" | "slider" | "select" | "boolean";
   props: VariableProps;
   children?: ModeloBlock[];
 }
 
 export interface FormulaBlock {
   id: string;
-  type: "modelFormula" | "formula";
+  type: "formula";
   props: FormulaProps;
   children?: ModeloBlock[];
 }
@@ -96,10 +96,20 @@ export interface ProjectedFormula extends ProjectedVariableBase {
 
 export type ProjectedVariable = ProjectedInput | ProjectedFormula;
 
+/** A variable block the projector could not admit to the registry, and why. */
+export interface ProjectionIssue {
+  blockId: string;
+  kind: "input" | "formula";
+  varId?: VariableId;
+  name?: string;
+  message: string;
+}
+
 export interface ProjectedModel {
   variables: ProjectedVariable[];
   byId: Record<VariableId, ProjectedVariable>;
   idByName: Record<string, VariableId>;
+  issues: ProjectionIssue[];
 }
 
 export type EvaluationStatus = "ok" | "missing" | "error";

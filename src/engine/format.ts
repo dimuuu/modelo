@@ -56,6 +56,54 @@ function normalize(
   return { ...input, locale: input.locale || locale };
 }
 
+/** The format kind the caller named, before workspace defaults fill it in. */
+function sourceFormatOf(
+  input: FormatInput | undefined
+): FormatKind | NumberFormat | undefined {
+  if (typeof input === "string") {
+    return input;
+  }
+  if (input && "format" in input) {
+    return input.format;
+  }
+  return undefined;
+}
+
+/** Fixed decimals the caller asked for, or undefined for automatic. */
+function fixedDecimals(input: FormatInput | undefined): number | undefined {
+  if (
+    typeof input === "object" &&
+    "decimals" in input &&
+    input.decimals !== undefined &&
+    input.decimals >= 0
+  ) {
+    return input.decimals;
+  }
+  return undefined;
+}
+
+/** Currency shows whole numbers without cents and everything else with two. */
+function digitOptionsFor(
+  value: number,
+  format: NumberFormat,
+  decimals: number | undefined
+): Pick<
+  Intl.NumberFormatOptions,
+  "maximumFractionDigits" | "minimumFractionDigits"
+> {
+  const defaultCurrencyDigits = Number.isInteger(value) ? 0 : 2;
+  const currencyDigits =
+    format.style === "currency" && decimals === undefined
+      ? defaultCurrencyDigits
+      : undefined;
+  return {
+    maximumFractionDigits:
+      decimals ?? currencyDigits ?? format.maximumFractionDigits,
+    minimumFractionDigits:
+      decimals ?? currencyDigits ?? format.minimumFractionDigits,
+  };
+}
+
 /** Formats successful numeric values with workspace defaults and optional fixed decimals. */
 export function formatValue(
   value: number,
@@ -66,38 +114,15 @@ export function formatValue(
     return "Error: non-finite result";
   }
   const format = normalize(input, defaults);
-  let sourceFormat: FormatKind | NumberFormat | undefined;
-  if (typeof input === "string") {
-    sourceFormat = input;
-  } else if (input && "format" in input) {
-    sourceFormat = input.format;
-  }
-  const decimals =
-    typeof input === "object" &&
-    input &&
-    "decimals" in input &&
-    input.decimals !== undefined &&
-    input.decimals >= 0
-      ? input.decimals
-      : undefined;
-  if (sourceFormat === "percent") {
+  const decimals = fixedDecimals(input);
+  if (sourceFormatOf(input) === "percent") {
     return new Intl.NumberFormat(format.locale, {
       maximumFractionDigits: decimals ?? 1,
       minimumFractionDigits: decimals,
       style: "percent",
     }).format(value);
   }
-  const defaultCurrencyDigits = Number.isInteger(value) ? 0 : 2;
-  const currencyDigits =
-    format.style === "currency" && decimals === undefined
-      ? defaultCurrencyDigits
-      : undefined;
-  const digitOptions = {
-    maximumFractionDigits:
-      decimals ?? currencyDigits ?? format.maximumFractionDigits,
-    minimumFractionDigits:
-      decimals ?? currencyDigits ?? format.minimumFractionDigits,
-  };
+  const digitOptions = digitOptionsFor(value, format, decimals);
   if (format.style === "currency") {
     return new Intl.NumberFormat(format.locale, {
       currency: format.currency,
