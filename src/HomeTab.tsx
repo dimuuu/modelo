@@ -1,18 +1,22 @@
-import { CopyIcon, PlusIcon, UploadIcon, XIcon } from "lucide-react";
+import { PlusIcon, UploadIcon } from "lucide-react";
 import { useId } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 
+import { NotebookMenu } from "./NotebookMenu";
 import { notebookTitle } from "./workspace";
 import type { NotebookRecord, Workspace } from "./workspace";
 
-function updatedLabel(iso: string, locale: string): string {
+/**
+ * The app reads as American English, whatever the model formats its numbers
+ * in, so this date does not follow the workspace locale.
+ */
+function updatedLabel(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) {
     return "";
   }
-  return date.toLocaleDateString(locale, {
+  return date.toLocaleDateString("en-US", {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -21,8 +25,8 @@ function updatedLabel(iso: string, locale: string): string {
 
 /**
  * What a new tab shows: every notebook in the workspace, plus the two ways to
- * add one. There is no export here on purpose — a notebook is exported from
- * the tab that has it open.
+ * add one. The list sits in a card that runs to the bottom of the viewport and
+ * scrolls on its own, so the two buttons stay in reach.
  */
 export function HomeTab({
   workspace,
@@ -41,28 +45,22 @@ export function HomeTab({
 }) {
   const importId = useId();
   return (
-    <section className="mx-auto max-w-[760px] px-9 py-[9vh]">
-      <p className="text-[11px] font-bold tracking-[0.12em] uppercase">
-        Workspace
-      </p>
-      <h1 className="my-2 text-4xl font-semibold tracking-[-0.035em]">
-        Notebook and model, together.
-      </h1>
-      <p className="text-muted-foreground leading-relaxed">
-        Open a notebook in this tab, or start a new one. Your workspace stays in
-        this browser.
-      </p>
-
-      <div className="mt-5 flex items-center gap-2">
+    <div className="bg-muted/40 flex h-full flex-col">
+      <div className="mx-auto flex w-full max-w-[860px] shrink-0 items-center gap-2 px-6 py-5">
         <Button onClick={onCreate} type="button">
           <PlusIcon />
           New notebook
         </Button>
-        <Label
-          className="hover:bg-accent flex h-9 cursor-pointer items-center gap-2 rounded-md border px-3 text-sm font-medium"
-          htmlFor={importId}
+        {/*
+         * A label, not a button, because only a label can open a file picker.
+         * It renders through Button so it matches New notebook exactly.
+         */}
+        <Button
+          className="cursor-pointer"
+          render={<label aria-label="Import" htmlFor={importId} />}
+          variant="outline"
         >
-          <UploadIcon className="size-4" />
+          <UploadIcon />
           Import
           <input
             accept="application/json"
@@ -78,59 +76,42 @@ export function HomeTab({
             }}
             type="file"
           />
-        </Label>
+        </Button>
       </div>
 
-      <nav aria-label="Notebooks" className="mt-9 flex flex-col">
-        {workspace.notebooks.map((notebook) => {
-          const title = notebookTitle(notebook);
-          return (
-            <div
-              className="group grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-2 border-b py-1"
-              key={notebook.id}
+      <nav
+        aria-label="Notebooks"
+        className="bg-background mx-auto w-full max-w-[860px] flex-1 overflow-y-auto rounded-t-2xl border border-b-0 px-2 py-2"
+      >
+        {workspace.notebooks.map((notebook) => (
+          <div
+            className="hover:bg-muted/50 grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 rounded-lg px-3"
+            key={notebook.id}
+          >
+            <button
+              className="min-w-0 truncate py-2.5 text-left text-[15px]"
+              onClick={() => onOpen(notebook.id)}
+              type="button"
             >
-              <button
-                className="min-w-0 truncate py-2 text-left text-[15px]"
-                onClick={() => onOpen(notebook.id)}
-                type="button"
-              >
-                {title}
-              </button>
-              <span className="text-muted-foreground text-[13px]">
-                {updatedLabel(notebook.updatedAt, workspace.locale)}
-              </span>
-              <Button
-                aria-label={`Duplicate ${title}`}
-                className="text-muted-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-                onClick={() => onDuplicate(notebook.id)}
-                size="icon-sm"
-                title="Duplicate"
-                type="button"
-                variant="ghost"
-              >
-                <CopyIcon />
-              </Button>
-              <Button
-                aria-label={`Delete ${title}`}
-                className="text-muted-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-                onClick={() => onDelete(notebook)}
-                size="icon-sm"
-                title="Delete"
-                type="button"
-                variant="ghost"
-              >
-                <XIcon />
-              </Button>
-            </div>
-          );
-        })}
+              {notebookTitle(notebook)}
+            </button>
+            <span className="text-muted-foreground text-[13px]">
+              {updatedLabel(notebook.updatedAt)}
+            </span>
+            <NotebookMenu
+              notebook={notebook}
+              onDelete={() => onDelete(notebook)}
+              onDuplicate={() => onDuplicate(notebook.id)}
+            />
+          </div>
+        ))}
         {workspace.notebooks.length === 0 ? (
-          <p className="text-muted-foreground text-sm">
+          <p className="text-muted-foreground px-3 py-6 text-sm">
             No notebooks yet. Create one, or import a notebook you exported
             before.
           </p>
         ) : null}
       </nav>
-    </section>
+    </div>
   );
 }

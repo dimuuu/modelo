@@ -33,14 +33,13 @@ import {
   activateTab,
   closeTab,
   goHome,
-  initialTabs,
   newTab,
   openInTab,
   openNotebookId,
   pruneTabs,
 } from "./tabs";
-import type { TabState } from "./tabs";
 import { TabStrip } from "./TabStrip";
+import { useTabState } from "./use-tab-state";
 import { ModeloTools } from "./webmcp/ModeloTools";
 import { findTool, runTool } from "./webmcp/tools";
 import type { ToolRuntime } from "./webmcp/tools";
@@ -72,7 +71,7 @@ type PendingDelete =
  */
 export default function App() {
   const [workspace, setWorkspace] = useState<Workspace>(() => loadWorkspace());
-  const [tabState, setTabState] = useState<TabState>(initialTabs);
+  const [tabState, updateTabs] = useTabState();
   const [scenarioDialogOpen, setScenarioDialogOpen] = useState(false);
   const [scenarioName, setScenarioName] = useState("");
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(
@@ -101,27 +100,30 @@ export default function App() {
     []
   );
 
-  const setTabs = useCallback((next: TabState) => {
-    if (next !== tabsRef.current) {
-      tabsRef.current = next;
-      setTabState(next);
-    }
-  }, []);
+  // The tools reach the tabs from outside React, so the state is mirrored.
+  useEffect(() => {
+    tabsRef.current = tabState;
+  }, [tabState]);
 
   const open = useCallback(
     (id: string | null) => {
-      setTabs(
-        id === null ? goHome(tabsRef.current) : openInTab(tabsRef.current, id)
+      updateTabs((current) =>
+        id === null ? goHome(current) : openInTab(current, id)
       );
     },
-    [setTabs]
+    [updateTabs]
   );
 
-  // A deleted notebook takes its tab with it, whoever deleted it.
+  // A deleted notebook takes its tab with it, whoever deleted it. The guard
+  // keeps an edit, which touches the catalogue on every keystroke, out of the
+  // query string.
   const { notebooks } = workspace;
   useEffect(() => {
-    setTabs(pruneTabs(tabsRef.current, new Set(notebooks.map(({ id }) => id))));
-  }, [notebooks, setTabs]);
+    const ids = new Set(notebooks.map(({ id }) => id));
+    if (pruneTabs(tabsRef.current, ids) !== tabsRef.current) {
+      updateTabs((current) => pruneTabs(current, ids));
+    }
+  }, [notebooks, updateTabs]);
 
   const runtime = useMemo<ToolRuntime>(
     () => ({
@@ -217,6 +219,12 @@ export default function App() {
     }
   };
 
+  const openId = openNotebookId(tabState);
+  const openNotebooks = tabState.tabs.flatMap((notebookId) => {
+    const notebook = findNotebook(workspace, notebookId);
+    return notebook ? [notebook] : [];
+  });
+
   const confirmDelete = () => {
     if (pendingDelete?.kind === "notebook") {
       run("delete_notebook", { id: pendingDelete.id });
@@ -228,62 +236,65 @@ export default function App() {
 
   return (
     <div className="flex h-dvh flex-col">
-      <ModeloTools
-        notebookOpen={openNotebookId(tabState) !== null}
-        runtime={runtime}
-      />
+      <ModeloTools notebookOpen={openId !== null} runtime={runtime} />
       <TabStrip
-        onActivate={(tabId) => setTabs(activateTab(tabsRef.current, tabId))}
-        onClose={(tabId) => setTabs(closeTab(tabsRef.current, tabId))}
-        onNewTab={() => setTabs(newTab(tabsRef.current))}
+        onActivate={(index) => updateTabs((c) => activateTab(c, index))}
+        onClose={(index) => updateTabs((c) => closeTab(c, index))}
+        onNewTab={() => updateTabs(newTab)}
         state={tabState}
         titleOf={titleOf}
       />
       <main className="min-h-0 flex-1">
-        {tabState.tabs.map((tab) => {
-          const notebook = findNotebook(workspace, tab.notebookId);
-          return (
-            <div
-              className={
-                tab.id === tabState.activeId
-                  ? "h-full overflow-y-auto"
-                  : "hidden"
+        {/*
+         * Home is stateless, so every home tab shares one panel. A notebook
+         * panel is keyed by its notebook, so closing another tab cannot
+         * remount it and lose the cursor.
+         */}
+        <div className="h-full overflow-y-auto" hidden={openId !== null}>
+          <HomeTab
+            onCreate={() =>
+              run("create_notebook", { name: "Untitled notebook" })
+            }
+            onDelete={(record) =>
+              setPendingDelete({
+                id: record.id,
+                kind: "notebook",
+                title: notebookTitle(record),
+              })
+            }
+            onDuplicate={(id) => run("duplicate_notebook", { id })}
+            onImport={importFile}
+            onOpen={(id) => run("open_notebook", { id })}
+            workspace={workspace}
+          />
+        </div>
+        {openNotebooks.map((notebook) => (
+          <div
+            className="h-full overflow-y-auto"
+            hidden={notebook.id !== openId}
+            key={notebook.id}
+          >
+            <NotebookTab
+              defaults={defaults}
+              notebook={notebook}
+              onApplyScenario={(name) => run("apply_scenario", { name })}
+              onDelete={() =>
+                setPendingDelete({
+                  id: notebook.id,
+                  kind: "notebook",
+                  title: notebookTitle(notebook),
+                })
               }
-              key={tab.id}
-            >
-              {notebook ? (
-                <NotebookTab
-                  defaults={defaults}
-                  notebook={notebook}
-                  onApplyScenario={(name) => run("apply_scenario", { name })}
-                  onDeleteScenario={(name) =>
-                    setPendingDelete({ kind: "scenario", name })
-                  }
-                  onSave={saveNotebook}
-                  onSaveScenario={() => setScenarioDialogOpen(true)}
-                  registerPort={registerPort}
-                />
-              ) : (
-                <HomeTab
-                  onCreate={() =>
-                    run("create_notebook", { name: "Untitled notebook" })
-                  }
-                  onDelete={(record) =>
-                    setPendingDelete({
-                      id: record.id,
-                      kind: "notebook",
-                      title: notebookTitle(record),
-                    })
-                  }
-                  onDuplicate={(id) => run("duplicate_notebook", { id })}
-                  onImport={importFile}
-                  onOpen={(id) => run("open_notebook", { id })}
-                  workspace={workspace}
-                />
-              )}
-            </div>
-          );
-        })}
+              onDeleteScenario={(name) =>
+                setPendingDelete({ kind: "scenario", name })
+              }
+              onDuplicate={() => run("duplicate_notebook", { id: notebook.id })}
+              onSave={saveNotebook}
+              onSaveScenario={() => setScenarioDialogOpen(true)}
+              registerPort={registerPort}
+            />
+          </div>
+        ))}
       </main>
 
       <Dialog onOpenChange={setScenarioDialogOpen} open={scenarioDialogOpen}>

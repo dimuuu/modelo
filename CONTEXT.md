@@ -40,7 +40,8 @@ These are the names the code uses. Use them in modules, in tests, in docs, and i
 
 ## The shell
 
-- **Tab** — one slot in the tab strip. It shows one notebook, or **home** when its `notebookId` is null. A notebook is open in at most one tab, so its editor and its saved blocks never fork. Every change is a pure reducer in `src/tabs.ts`.
+- **Tab** — one slot in the tab strip: a notebook id, or null for **home**. A notebook is open in at most one tab, so its editor and its saved blocks never fork. Every change is a pure reducer in `src/tabs.ts`.
+- **Tab state** — the list of tabs and the index of the one in front. It lives in the query string, not in React state: `?tabs=home,sales-ae-comp-plan&tab=2`. `useTabState` binds the two with nuqs (`src/use-tab-state.ts`).
 - **Home** — what a new tab shows: the catalogue of notebooks, the new notebook button, and the import button (`src/HomeTab.tsx`). There is no notebook open, so notebook tools stay unregistered.
 - **Open notebook** — the notebook in the tab that is in front. It is the one the tools act on.
 

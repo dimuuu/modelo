@@ -15,7 +15,7 @@ Modelo is a local-first notebook where the story and the calculation model are t
 - A MathJS formula graph with forward references, visible parse, missing, and cycle errors, and formula rewrites on rename.
 - Named scenarios. Save the current inputs, apply a saved set, and see which one matches. Up to eight.
 - A workspace you can create, open, rename, duplicate, and delete. Everything persists in `localStorage`.
-- Browser-style tabs. A new tab opens on home, which lists every notebook, and a notebook takes over the tab you open it from.
+- Browser-style tabs. A new tab opens on home, which lists every notebook, and a notebook takes over the tab you open it from. The open tabs live in the URL, so a reload or a shared link brings them back.
 - JSON export and import of one notebook. Export from the tab that has it open.
 - Native WebMCP registration. No backend and no polyfill.
 
@@ -57,7 +57,7 @@ To build a new model, ask the agent to write a section rather than to dump varia
 
 ## Browser data
 
-Everything lives in this browser under the `modelo.workspace.v1` key. Open tabs are not stored; they last as long as the page. Export a notebook before you clear site data or change browser.
+Everything lives in this browser under the `modelo.workspace.v1` key. Which tabs are open lives in the URL instead. Export a notebook before you clear site data or change browser.
 
 ## More
 

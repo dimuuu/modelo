@@ -1,6 +1,6 @@
 # Modelo — working notes
 
-Modelo is a local-first notebook where prose and a calculation model are the same document. React 19 and Vite. No backend, no auth, no router.
+Modelo is a local-first notebook where prose and a calculation model are the same document. React 19 and Vite. No backend, no auth, no router; the tab strip keeps its state in the query string with nuqs.
 
 Read the code for how it works. Read these files for what the code cannot say:
 

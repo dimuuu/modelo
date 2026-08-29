@@ -3,9 +3,12 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { NuqsTestingAdapter } from "nuqs/adapters/testing";
+import type { OnUrlUpdateFunction } from "nuqs/adapters/testing";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import App from "../src/App";
 import { STORAGE_KEY } from "../src/workspace";
@@ -14,6 +17,28 @@ afterEach(() => {
   cleanup();
   localStorage.clear();
 });
+
+/**
+ * The tab strip lives in the query string, so every render needs an adapter.
+ * `hasMemory` makes the testing adapter read back what the app writes.
+ * `resetUrlUpdateQueueOnMount` must be off: the testing adapter resets the
+ * queue on every render, not only on mount, which drops a second update the
+ * app makes while the first is still in flight.
+ */
+function renderApp(searchParams = "", onUrlUpdate?: OnUrlUpdateFunction) {
+  return render(<App />, {
+    wrapper: ({ children }) => (
+      <NuqsTestingAdapter
+        hasMemory
+        onUrlUpdate={onUrlUpdate}
+        resetUrlUpdateQueueOnMount={false}
+        searchParams={searchParams}
+      >
+        {children}
+      </NuqsTestingAdapter>
+    ),
+  });
+}
 
 /**
  * A tab starts on home, so a test that wants the editor opens a notebook
@@ -29,7 +54,7 @@ async function openNotebook(name = "Untitled notebook") {
 
 describe("Modelo app smoke", () => {
   it("starts on home and lists the seeded workspace", async () => {
-    render(<App />);
+    renderApp();
     const catalogue = await screen.findByRole("navigation", {
       name: "Notebooks",
     });
@@ -42,7 +67,7 @@ describe("Modelo app smoke", () => {
   });
 
   it("opens a notebook into the home tab", async () => {
-    render(<App />);
+    renderApp();
     await openNotebook("AE compensation & accelerator");
     expect(await screen.findByDisplayValue("closed_arr")).toBeTruthy();
     // The tab took the notebook, so home is no longer on screen.
@@ -50,34 +75,84 @@ describe("Modelo app smoke", () => {
   });
 
   it("opens a new notebook on its own title heading", async () => {
-    render(<App />);
+    renderApp();
     fireEvent.click(screen.getByRole("button", { name: "New notebook" }));
     // The tab label and the document heading both read the same block.
-    expect(await screen.findAllByText("Untitled notebook")).toHaveLength(2);
+    expect(
+      await screen.findByRole("heading", {
+        level: 1,
+        name: "Untitled notebook",
+      })
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Close Untitled notebook" })
+    ).toBeTruthy();
   });
 
   it("gives every new tab a home, and keeps one tab open", async () => {
-    render(<App />);
+    renderApp();
     await openNotebook("AE compensation & accelerator");
+    expect(await screen.findByDisplayValue("closed_arr")).toBeTruthy();
+
     fireEvent.click(screen.getByRole("button", { name: "New tab" }));
     expect(
       await screen.findByRole("navigation", { name: "Notebooks" })
     ).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Close Home" }));
-    expect(await screen.findByDisplayValue("closed_arr")).toBeTruthy();
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "Close Home" })).toBeNull()
+    );
+
+    // Closing the last tab leaves a home tab, not an empty window.
     fireEvent.click(
       screen.getByRole("button", {
         name: "Close AE compensation & accelerator",
       })
     );
     expect(
-      await screen.findByRole("navigation", { name: "Notebooks" })
+      await screen.findByRole("button", { name: "Close Home" })
     ).toBeTruthy();
   });
 
+  it("offers export, duplicate, and delete in the notebook menu", async () => {
+    renderApp();
+    await openNotebook("AE compensation & accelerator");
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Actions for AE compensation & accelerator",
+      })
+    );
+    expect(
+      await screen.findByRole("menuitem", { name: "Export" })
+    ).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "Duplicate" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
+    expect(
+      await screen.findByText("Delete 'AE compensation & accelerator'?")
+    ).toBeTruthy();
+  });
+
+  it("restores the tabs named in the URL", async () => {
+    renderApp("?tabs=home,sales-ae-comp-plan&tab=2");
+    expect(await screen.findByDisplayValue("closed_arr")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Close Home" })).toBeTruthy();
+    expect(screen.queryByRole("navigation", { name: "Notebooks" })).toBeNull();
+  });
+
+  it("writes the open tabs to the URL", async () => {
+    const onUrlUpdate = vi.fn();
+    renderApp("", onUrlUpdate);
+    await openNotebook("AE compensation & accelerator");
+    await waitFor(() => expect(onUrlUpdate).toHaveBeenCalled());
+    const [event] = onUrlUpdate.mock.calls.at(-1) as [
+      { searchParams: URLSearchParams },
+    ];
+    expect(event.searchParams.get("tabs")).toBe("sales-ae-comp-plan");
+  });
+
   it("brings an open notebook forward instead of opening it twice", async () => {
-    render(<App />);
+    renderApp();
     await openNotebook("AE compensation & accelerator");
     fireEvent.click(screen.getByRole("button", { name: "New tab" }));
     await openNotebook("AE compensation & accelerator");
@@ -144,7 +219,7 @@ describe("Modelo app smoke", () => {
         version: 1,
       })
     );
-    render(<App />);
+    renderApp();
     await openNotebook();
     expect(await screen.findByDisplayValue("EUR")).toBeTruthy();
     expect(screen.getByLabelText("Slider minimum")).toHaveProperty(
@@ -192,7 +267,7 @@ describe("Modelo app smoke", () => {
         version: 1,
       })
     );
-    render(<App />);
+    renderApp();
     await openNotebook();
 
     const currency = await screen.findByLabelText("Currency code");
@@ -232,7 +307,7 @@ describe("Modelo app smoke", () => {
         version: 1,
       })
     );
-    render(<App />);
+    renderApp();
     await openNotebook();
 
     const unit = await screen.findByRole("combobox", { name: "Unit" });
@@ -270,7 +345,7 @@ describe("Modelo app smoke", () => {
         version: 1,
       })
     );
-    render(<App />);
+    renderApp();
     await openNotebook();
 
     // A default of 0 here would silently clamp any value an agent sets.
@@ -304,7 +379,7 @@ describe("Modelo app smoke", () => {
         version: 1,
       })
     );
-    render(<App />);
+    renderApp();
     await openNotebook();
     expect(await screen.findByLabelText("result expression")).toBeTruthy();
     expect(screen.queryByLabelText("Format")).toBeNull();
@@ -341,7 +416,7 @@ describe("Modelo app smoke", () => {
         version: 1,
       })
     );
-    render(<App />);
+    renderApp();
     await openNotebook();
     const chip = await screen.findByRole("button", { name: "Best case" });
     expect(chip.getAttribute("aria-pressed")).toBe("false");

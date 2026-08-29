@@ -34,7 +34,7 @@ pnpm build
 - `src/notebook/` is the seam. `EditorPort` names the seven editor operations; BlockNote and an in-memory array both implement it. `NotebookSession` and the shared mutations sit on top.
 - `src/webmcp/tools.ts` is the tool table. `App.tsx` buttons and WebMCP agents call the same `runTool`.
 - `src/editor.tsx` is the only file that knows the BlockNote schema. `src/NotebookEditor.tsx` is the only file that creates an editor. `src/editor-menus.tsx` holds the menus, and says which BlockNote controls Modelo offers.
-- The shell is `App.tsx` over three parts: `src/tabs.ts` holds the pure tab reducers, `src/TabStrip.tsx` draws the strip, and a tab renders `src/HomeTab.tsx` or `src/NotebookTab.tsx`. Every open notebook stays mounted; `App` keeps one editor port per notebook and hands the tools the one in front.
+- The shell is `App.tsx` over four parts: `src/tabs.ts` holds the pure tab reducers, `src/use-tab-state.ts` binds them to the query string with nuqs, `src/TabStrip.tsx` draws the strip, and a tab renders `src/HomeTab.tsx` or `src/NotebookTab.tsx`. Both show the same `src/NotebookMenu.tsx`: export, duplicate, delete. Every open notebook stays mounted; `App` keeps one editor port per notebook and hands the tools the one in front.
 - Every document opens with a level 1 heading, and that heading is the notebook title. `src/engine/title.ts` reads it; `ensureTitleBlock` puts it back after a person deletes it.
 
 ## Adding a model block type
@@ -65,11 +65,11 @@ Registration is automatic: `ModeloTools` renders one `useWebMCP` per row.
 - `engine.test.ts`, `notebook.test.ts`, `composition.test.ts`, `scenarios.test.ts`, `get-model.test.ts`, `block-update.test.ts`, `portable.test.ts`, `editor-config.test.ts` — pure functions, no DOM.
 - `tools.test.ts` — every tool through `runTool` against an in-memory editor and workspace.
 - `workspace.test.ts` — persistence, the catalogue reducers, and notebook import.
-- `tabs.test.ts` — the tab reducers: opening, closing, home, and pruning after a delete.
+- `tabs.test.ts` — the tab reducers and the query string form: opening, closing, home, pruning after a delete, and the round trip.
 - `webmcp-schemas.test.ts` — the zod schemas accept valid payloads and reject malformed ones.
 - `app.test.tsx` — renders the real `App` against seeded `localStorage`.
 
-The app tests query by `getByRole` and `getByLabelText`. shadcn's Select is a Base UI combobox, not a native `<select>`: click the trigger, then query `role="option"`.
+The app tests query by `getByRole` and `getByLabelText`. They render through `NuqsTestingAdapter`, because the tab strip reads the query string; `renderApp` in `app.test.tsx` carries the props that adapter needs. shadcn's Select is a Base UI combobox, not a native `<select>`: click the trigger, then query `role="option"`.
 
 ## Style
 

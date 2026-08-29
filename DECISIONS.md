@@ -20,7 +20,6 @@ What the code cannot say for itself: the questions still open, the assumptions v
 - Number, slider, and select blocks may fix 0 to 8 decimals. Without that, currency shows 0 decimals for a whole number and 2 for any other. A formula takes its format from its units.
 - Select option values are numbers. The labels carry the meaning.
 - BlockNote refuses to delete the last block. Deleting a variable leaves formula errors and `missing` chips on show.
-- Tabs are session state. A reload opens one home tab, whatever was open before.
 - Out of scope: sync between browser windows, auth, sharing, locks, AI chat, and a backend.
 - One Vitest and happy-dom smoke test covers the UI. The engine, the tools, and the portable format are tested without a DOM.
 
@@ -35,6 +34,7 @@ Each entry names the alternative it rejects. [CONTEXT.md](./CONTEXT.md) names th
 - **The title is a block, not a field.** Every document opens with a level 1 heading, and that heading is the notebook title. The rejected alternative was a `title` field on the notebook record beside a heading in the document: two names for one thing, free to drift, and one of them invisible to the agent tools that write prose.
 - **Domain schemas live with their module.** The engine owns its rules; `src/webmcp/schemas.ts` only composes them. A tool schema that restates a rule will drift from it.
 - **Tabs, not a sidebar.** The notebook owns the viewport, and navigation is a strip of browser-style tabs over a home page. A sidebar spent width on a list a reader consults rarely, and it could show only one notebook at a time. Every open notebook now stays mounted behind its tab, so switching keeps the cursor and the scroll position.
+- **The query string is the tab store.** `?tabs=home,sales-ae-comp-plan&tab=2` is the whole tab strip, read and written with nuqs. A reload, a bookmark, and a shared link all open the same tabs, and there is no second copy of the state to keep in step. The rejected alternative was React state mirrored into the URL, which is two sources of truth for one list.
 - **One tab per notebook.** Opening a notebook that is already open brings its tab forward. Two editors over one record would fork the document, because each one saves its own copy of the blocks.
 - **shadcn on Base UI, not Radix.** One component library covers every control. The one stylesheet left is `src/blocknote-theme.css`, because BlockNote paints its own editor surface.
 
