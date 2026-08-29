@@ -1,22 +1,24 @@
 # Modelo
 
-Modelo is a local-first, Notion-like notebook where the story and the calculation model are the same document. Humans edit with BlockNote; formulas are evaluated in the page with MathJS; browser agents author the same visible document through native WebMCP tools.
+Modelo is a local-first notebook where the story and the calculation model are the same document. You edit prose with BlockNote. Formulas evaluate in the page with MathJS. A browser agent writes the same visible document through native WebMCP tools.
 
-**Live:** https://modelo.vercel.app (production URL; see the Vercel deployment for aliases)
+**Live:** https://modelo.vercel.app
+
+> Pre-release. The README is short on purpose and will grow at v1.
 
 ## What works
 
-- Three first-run notebooks: AE compensation, founder runway, and a Valencia-flavoured rent-vs-mortgage model.
-- Full BlockNote prose editing: headings, paragraphs, lists, marks, slash menu, block drag, and undo.
-- `/Number`, `/Slider`, `/Select`, `/Toggle`, and `/Formula` custom blocks. Every model block defines one stable-id variable.
-- Type `@` to insert a live variable reference chip in prose. Deleting its source shows `missing`; it never substitutes zero.
-- MathJS formula graph with forward references, visible parse/missing/cycle errors, exact-symbol formula rewrites on variable rename, EUR/currency/percent/unit display, and unique-name validation.
-- Named scenarios: save the current input values, apply a saved set, and see which one matches. A notebook holds up to eight.
-- Workspace create, open, rename, duplicate, and delete. The complete workspace persists in `localStorage`; deleted seeds do not return.
-- Export the current notebook or workspace as JSON; import a prior Modelo workspace JSON.
-- Native WebMCP registration through `use-webmcp-tool` 0.2.0. There is no backend and no product polyfill.
+- Three notebooks on first run: AE compensation, founder runway, and rent against mortgage.
+- Full BlockNote prose editing: headings, paragraphs, lists, marks, the slash menu, block drag, and undo.
+- Five model blocks: `/Number`, `/Slider`, `/Select`, `/Toggle`, and `/Formula`. Each one declares a variable.
+- Type `@` in prose to insert a live variable chip. Delete the source and the chip reads `missing`. It never falls back to zero.
+- A MathJS formula graph with forward references, visible parse, missing, and cycle errors, and formula rewrites on rename.
+- Named scenarios. Save the current inputs, apply a saved set, and see which one matches. Up to eight.
+- A workspace you can create, open, rename, duplicate, and delete. Everything persists in `localStorage`.
+- JSON export of one notebook or the whole workspace, and import of a Modelo workspace file.
+- Native WebMCP registration. No backend and no polyfill.
 
-## Run locally
+## Run it
 
 ```bash
 pnpm install
@@ -26,7 +28,7 @@ pnpm dev
 Checks:
 
 ```bash
-pnpm test     # vitest, 96 tests
+pnpm test     # vitest
 pnpm check    # oxlint via ultracite
 pnpm fix      # oxlint --fix and oxfmt --write
 pnpm build    # tsc -b && vite build
@@ -34,56 +36,33 @@ pnpm build    # tsc -b && vite build
 
 ## Stack
 
-- **React 19 + Vite 7 + TypeScript** — no framework, no server.
-- **BlockNote 0.54** — the editor, and the single source of truth for the document.
-- **MathJS 15** — formula parsing, unit algebra, and evaluation.
-- **zod 4** — every value crossing a boundary is parsed: WebMCP tool arguments, `localStorage`, and imported files. Domain schemas live with their engine module; `src/webmcp/schemas.ts` composes them into tool arguments.
-- **Tailwind CSS v4 + shadcn/ui (Base UI)** — every control in the app. The only hand-written CSS left is `src/blocknote-theme.css`, which binds BlockNote's own editor surface to the shadcn design tokens.
-- **Ultracite + oxlint + oxfmt** — formatting and linting. `oxlint.config.ts` documents every rule the project overrides and why.
+React 19, Vite, and TypeScript. BlockNote for the editor. MathJS for formulas. zod at every boundary. Tailwind CSS and shadcn/ui on Base UI for the interface. Ultracite with oxlint and oxfmt for linting and formatting. There is no server.
 
 ## WebMCP
 
-Use Chrome with `chrome://flags/#enable-webmcp-testing`, or ChatGPT's in-app browser. Native `document.modelContext` must be available; otherwise Modelo stays fully usable and reports "WebMCP unavailable" in the sidebar.
+Use Chrome with `chrome://flags/#enable-webmcp-testing`, or ChatGPT's in-app browser. Modelo needs native `document.modelContext`. Without it the app stays fully usable and the sidebar reports "WebMCP unavailable".
 
-Workspace tools remain registered everywhere:
+Workspace tools are always registered. Notebook tools register only while a notebook is open. `src/webmcp/tools.ts` is the full list: one row per tool.
 
-- `list_notebooks`, `open_notebook`, `create_notebook`, `duplicate_notebook`, `delete_notebook`, `rename_notebook`
+Every tool argument is parsed with zod before it reaches the document. A failure returns `{ ok: false, error: { code, message, details? } }` with no stack trace.
 
-Document tools register only while a notebook is open:
-
-- Read: `get_document`, `get_model`, `find_references`
-- Write prose and model: `write_section`, `write_sections`, `insert_blocks`, `update_block`, `update_blocks`, `remove_blocks`, `remove_variable`, `replace_paragraph`, `insert_inline_ref`, `set_variable`
-- Scenarios: `list_scenarios`, `save_scenario`, `apply_scenario`, `delete_scenario`
-
-Tool arguments are validated against zod schemas before they reach the document; a mismatch returns an `INVALID_ARGUMENTS` failure. Tool failures are structured `{ ok: false, error: { code, message, details? } }` values without stack traces. Document mutations use the BlockNote editor API inside `editor.transact`.
-
-### Suggested prompts against the Sales notebook
-
-To build a new model, ask the agent to `write_section` rather than dump variables. Use typed `insert_blocks` only for targeted block surgery; paragraph `@name` tokens become live references.
+Try these against the AE compensation notebook:
 
 1. "List the notebooks, open the AE compensation notebook, then summarize its model and any errors."
 2. "Set `closed_arr` to 1,050,000 and tell me the new earned commission and total cash compensation."
-3. "Add a paragraph after the model saying `At @closed_arr, total cash pay is @total_cash_compensation.`"
-4. "Insert a formula named `variable_pay_multiple` equal to `earned_commission / target_variable_pay`, then add a paragraph that references it."
-5. "Duplicate this notebook as 'Aggressive sales scenario', open the copy, and set `accelerator_multiplier` to 2."
+3. "Insert a formula named `variable_pay_multiple` equal to `earned_commission / target_variable_pay`, then add a paragraph that references it."
 
-## Architecture
-
-`editor.document` is the open notebook's only document source of truth. Human controls and WebMCP tools mutate it through the same `EditorPort` seam and the same mutation functions. `describeNotebook` projects variables and evaluates the graph once per document version; `ModelProvider` paints the result; `onChange` converts the document to the portable format and persists it. React state holds the workspace catalogue and the id of the open notebook, nothing more.
-
-Three ideas carry the design:
-
-- **One portable format** for seeds, storage, exports, agent payloads, and `get_document` (`src/engine/portable.ts`).
-- **An editor port with two adapters**: BlockNote in the app, an in-memory array in tests and for `dry_run` (`src/notebook/`).
-- **A tool table**: every WebMCP tool is one row with its name, schema, description, and implementation (`src/webmcp/tools.ts`). The sidebar buttons call the same `runTool` an agent does.
-
-Seeds are repository JSON fixtures copied only when the storage key is absent. Existing storage is authoritative on later deploys.
-
-See [CONTEXT.md](./CONTEXT.md) for the vocabulary, [CONTRIBUTING.md](./CONTRIBUTING.md) for the module map and the recipes for adding a block type or a WebMCP tool, and [DECISIONS.md](./DECISIONS.md) for open questions and standing assumptions.
+To build a new model, ask the agent to write a section rather than to dump variables. An `@name` in a paragraph becomes a live reference.
 
 ## Browser data
 
-All data lives in this browser's local storage under `modelo.workspace.v1`. Export before clearing site data or switching browsers.
+Everything lives in this browser under the `modelo.workspace.v1` key. Export before you clear site data or change browser.
+
+## More
+
+- [CONTEXT.md](./CONTEXT.md) — the domain vocabulary.
+- [CONTRIBUTING.md](./CONTRIBUTING.md) — the module map and the recipes for adding a block type or a tool.
+- [DECISIONS.md](./DECISIONS.md) — open questions, v1 assumptions, and why the architecture is this way.
 
 ## License
 

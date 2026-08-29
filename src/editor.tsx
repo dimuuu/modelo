@@ -51,7 +51,6 @@ const sharedProps = {
   currency: { default: INPUT_PROP_DEFAULTS.currency as string },
   decimals: { default: INPUT_PROP_DEFAULTS.decimals as number },
   format: { default: INPUT_PROP_DEFAULTS.format as string },
-  label: { default: INPUT_PROP_DEFAULTS.label as string },
   locale: { default: INPUT_PROP_DEFAULTS.locale as string },
   name: { default: INPUT_PROP_DEFAULTS.name as string },
   unit: { default: INPUT_PROP_DEFAULTS.unit as string },
@@ -73,7 +72,6 @@ const FORMAT_OPTIONS = [
 interface ModelBlockProps {
   varId: string;
   name: string;
-  label: string;
   value?: number;
   format?: string;
   currency?: string;
@@ -166,11 +164,12 @@ function Value({
   );
 }
 
+/** The editable variable name: the only caption a model block has. */
 function VariableName({ block, editor }: ModelBlockFields) {
   return (
     <Input
       aria-label="Variable name"
-      className="text-muted-foreground h-6 w-36 border-transparent bg-transparent px-1.5 text-right font-mono text-[11px] shadow-none"
+      className="-mx-1.5 h-7 w-56 border-transparent bg-transparent px-1.5 font-mono text-[13px] font-semibold shadow-none"
       defaultValue={block.props.name}
       onBlur={(event) => {
         const nextName = event.currentTarget.value.trim();
@@ -194,36 +193,6 @@ function VariableName({ block, editor }: ModelBlockFields) {
   );
 }
 
-/** The bold caption and the editable variable name shown above every control. */
-function BlockHeader({ block, editor }: ModelBlockFields) {
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <strong className="truncate text-sm font-semibold">
-        {block.props.label}
-      </strong>
-      <VariableName block={block} editor={editor} />
-    </div>
-  );
-}
-
-function LabelField({ block, editor }: ModelBlockFields) {
-  return (
-    <Field caption="Label">
-      {(id) => (
-        <Input
-          aria-label="Label"
-          className="h-7 text-[13px]"
-          id={id}
-          onChange={(event) =>
-            updateProps(editor, block, { label: event.currentTarget.value })
-          }
-          value={block.props.label}
-        />
-      )}
-    </Field>
-  );
-}
-
 function FormatFields({
   block,
   editor,
@@ -242,7 +211,6 @@ function FormatFields({
     : [...CURRENCIES];
   return (
     <div className="flex flex-wrap items-end gap-x-3 gap-y-2 border-t pt-3">
-      <LabelField block={block} editor={editor} />
       <Field caption="Format">
         {(id) => (
           <Select
@@ -533,10 +501,10 @@ const NumberBlock = createReactBlockSpec(
   {
     render: ({ block, editor }) => (
       <ModelBlock>
-        <BlockHeader block={block} editor={editor} />
+        <VariableName block={block} editor={editor} />
         <div className="flex items-center gap-3">
           <Input
-            aria-label={block.props.label}
+            aria-label={block.props.name}
             className="max-w-44"
             max={block.props.max}
             min={block.props.min}
@@ -569,10 +537,10 @@ const SliderBlock = createReactBlockSpec(
   {
     render: ({ block, editor }) => (
       <ModelBlock>
-        <BlockHeader block={block} editor={editor} />
+        <VariableName block={block} editor={editor} />
         <div className="flex items-center gap-4">
           <Slider
-            aria-label={block.props.label}
+            aria-label={block.props.name}
             max={block.props.max}
             min={block.props.min}
             onValueChange={(next) =>
@@ -616,7 +584,7 @@ const SelectBlock = createReactBlockSpec(
       }));
       return (
         <ModelBlock>
-          <BlockHeader block={block} editor={editor} />
+          <VariableName block={block} editor={editor} />
           <div className="flex items-center gap-3">
             <Select
               items={items}
@@ -625,7 +593,7 @@ const SelectBlock = createReactBlockSpec(
               }
               value={String(block.props.value)}
             >
-              <SelectTrigger aria-label={block.props.label} className="w-44">
+              <SelectTrigger aria-label={block.props.name} className="w-44">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -641,9 +609,6 @@ const SelectBlock = createReactBlockSpec(
             </Select>
             <Value fallback={block.props.value} varId={block.props.varId} />
           </div>
-          <div className="flex flex-wrap items-end gap-x-3 gap-y-2 border-t pt-3">
-            <LabelField block={block} editor={editor} />
-          </div>
           <SelectOptions block={block} editor={editor} />
         </ModelBlock>
       );
@@ -656,10 +621,10 @@ const BooleanBlock = createReactBlockSpec(
   {
     render: ({ block, editor }) => (
       <ModelBlock>
-        <BlockHeader block={block} editor={editor} />
+        <VariableName block={block} editor={editor} />
         <div className="flex items-center gap-3">
           <Switch
-            aria-label={block.props.label}
+            aria-label={block.props.name}
             checked={Boolean(block.props.value)}
             onCheckedChange={(checked) =>
               updateProps(editor, block, { value: checked ? 1 : 0 })
@@ -671,9 +636,6 @@ const BooleanBlock = createReactBlockSpec(
             varId={block.props.varId}
           />
         </div>
-        <div className="flex flex-wrap items-end gap-x-3 gap-y-2 border-t pt-3">
-          <LabelField block={block} editor={editor} />
-        </div>
       </ModelBlock>
     ),
   }
@@ -684,7 +646,6 @@ const FormulaBlock = createReactBlockSpec(
     content: "none",
     propSchema: {
       formula: { default: FORMULA_PROP_DEFAULTS.formula as string },
-      label: { default: FORMULA_PROP_DEFAULTS.label as string },
       name: { default: FORMULA_PROP_DEFAULTS.name as string },
       varId: { default: FORMULA_PROP_DEFAULTS.varId as string },
     },
@@ -693,10 +654,10 @@ const FormulaBlock = createReactBlockSpec(
   {
     render: ({ block, editor }) => (
       <ModelBlock accent>
-        <BlockHeader block={block} editor={editor} />
+        <VariableName block={block} editor={editor} />
         <div className="flex items-center gap-3">
           <Input
-            aria-label={`${block.props.label} expression`}
+            aria-label={`${block.props.name} expression`}
             className="font-mono text-[13px]"
             onChange={(e) =>
               updateProps(editor, block, { formula: e.target.value })
@@ -705,16 +666,13 @@ const FormulaBlock = createReactBlockSpec(
           />
           <Value varId={block.props.varId} />
         </div>
-        <div className="flex flex-wrap items-end gap-x-3 gap-y-2 border-t pt-3">
-          <LabelField block={block} editor={editor} />
-        </div>
       </ModelBlock>
     ),
   }
 );
 
 /** The live value chip an `@name` reference renders as inside prose. */
-function VariableRefChip({ label, varId }: { label: string; varId: string }) {
+function VariableRefChip({ name, varId }: { name: string; varId: string }) {
   const model = useContext(ModelContext);
   const variable = model?.byId[varId];
   const failed =
@@ -722,7 +680,7 @@ function VariableRefChip({ label, varId }: { label: string; varId: string }) {
   return (
     <Badge
       className="mx-px rounded-md px-1.5 py-0 align-baseline text-[0.92em] font-semibold tabular-nums"
-      title={label || variable?.name || "Missing variable"}
+      title={name || variable?.name || "Missing variable"}
       variant={failed ? "destructive" : "secondary"}
     >
       {variable?.formatted ?? "missing"}
@@ -733,13 +691,13 @@ function VariableRefChip({ label, varId }: { label: string; varId: string }) {
 const VariableRef = createReactInlineContentSpec(
   {
     content: "none",
-    propSchema: { label: { default: "" }, varId: { default: "" } },
+    propSchema: { name: { default: "" }, varId: { default: "" } },
     type: "variableRef",
   },
   {
     render: ({ inlineContent }) => (
       <VariableRefChip
-        label={inlineContent.props.label}
+        name={inlineContent.props.name}
         varId={inlineContent.props.varId}
       />
     ),

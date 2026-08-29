@@ -16,7 +16,7 @@ pnpm test
 pnpm build
 ```
 
-`pnpm check` allows warnings and forbids errors. The warnings that stand today are listed in [DECISIONS.md](./DECISIONS.md). The domain vocabulary is in [CONTEXT.md](./CONTEXT.md).
+`pnpm check` allows warnings and forbids errors. One warning stands on purpose; see Style below. The domain vocabulary is in [CONTEXT.md](./CONTEXT.md), and the standing assumptions are in [DECISIONS.md](./DECISIONS.md).
 
 ## How the pieces fit
 
@@ -34,6 +34,7 @@ pnpm build
 - `src/notebook/` is the seam. `EditorPort` names the seven editor operations; BlockNote and an in-memory array both implement it. `NotebookSession` and the shared mutations sit on top.
 - `src/webmcp/tools.ts` is the tool table. `App.tsx` buttons and WebMCP agents call the same `runTool`.
 - `src/editor.tsx` is the only file that knows the BlockNote schema. `src/NotebookEditor.tsx` is the only file that creates an editor.
+- Every document opens with a level 1 heading, and that heading is the notebook title. `src/engine/title.ts` reads it; `ensureTitleBlock` puts it back after a person deletes it.
 
 ## Adding a model block type
 
@@ -53,7 +54,6 @@ A model block is one variable. Five exist: `number`, `slider`, `select`, `boolea
 3. In `run`, take `context.session()` for a notebook tool. Read through `session.current()`, write inside `session.mutate(...)`, and return the extra fields you want merged into the mutation report. Use `session.preview(...)` for `dry_run`.
 4. Use `fault(code, message, details?)` for expected failures. Add the code to `ToolErrorCode` in `src/notebook/errors.ts` if it is new.
 5. Add a case to `tests/tools.test.ts`. The harness there runs the tool against `createMemoryPort`; if your tool cannot run there, its logic is in the wrong place.
-6. Add it to the tool list in the README.
 
 Registration is automatic: `ModeloTools` renders one `useWebMCP` per row.
 

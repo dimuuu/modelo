@@ -23,7 +23,7 @@ describe("the portable notebook format", () => {
             content: [
               { styles: { bold: true }, text: "Bold ", type: "text" },
               {
-                props: { label: "price", varId: "price-id" },
+                props: { name: "price", varId: "price-id" },
                 type: "variableRef",
               },
             ],
@@ -77,7 +77,7 @@ describe("the portable notebook format", () => {
     ) as { props?: { level: number }; content: unknown[] }[];
     expect(heading.props?.level).toBe(2);
     expect(paragraph.content[1]).toEqual({
-      props: { label: "price", varId: "price-id" },
+      props: { name: "price", varId: "price-id" },
       type: "variableRef",
     });
   });

@@ -33,7 +33,6 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Toaster } from "@/components/ui/sonner";
 
-import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
 import { toEditorBlocks } from "./engine/portable";
 import type { PortableBlock } from "./engine/portable";
@@ -47,6 +46,7 @@ import type { ToolRuntime } from "./webmcp/tools";
 import {
   findNotebook,
   loadWorkspace,
+  notebookTitle,
   parseWorkspace,
   replaceNotebookBlocks,
   saveWorkspace,
@@ -240,52 +240,55 @@ export default function App() {
           New notebook
         </Button>
         <nav className="-mx-1 flex flex-col gap-0.5 overflow-y-auto px-1">
-          {workspace.notebooks.map((notebook) => (
-            <div
-              className={`group grid grid-cols-[minmax(0,1fr)_auto_auto] items-center rounded-md ${
-                notebook.id === openId ? "bg-sidebar-accent" : ""
-              }`}
-              key={notebook.id}
-            >
-              <Button
-                className="justify-start truncate px-2 font-normal"
-                onClick={() => open(notebook.id)}
-                size="sm"
-                type="button"
-                variant="ghost"
+          {workspace.notebooks.map((notebook) => {
+            const title = notebookTitle(notebook);
+            return (
+              <div
+                className={`group grid grid-cols-[minmax(0,1fr)_auto_auto] items-center rounded-md ${
+                  notebook.id === openId ? "bg-sidebar-accent" : ""
+                }`}
+                key={notebook.id}
               >
-                <span className="truncate">{notebook.title}</span>
-              </Button>
-              <Button
-                aria-label={`Duplicate ${notebook.title}`}
-                className="text-muted-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-                onClick={() => run("duplicate_notebook", { id: notebook.id })}
-                size="icon-sm"
-                title="Duplicate"
-                type="button"
-                variant="ghost"
-              >
-                <CopyIcon />
-              </Button>
-              <Button
-                aria-label={`Delete ${notebook.title}`}
-                className="text-muted-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-                onClick={() =>
-                  setPendingDelete({
-                    id: notebook.id,
-                    kind: "notebook",
-                    title: notebook.title,
-                  })
-                }
-                size="icon-sm"
-                title="Delete"
-                type="button"
-                variant="ghost"
-              >
-                <XIcon />
-              </Button>
-            </div>
-          ))}
+                <Button
+                  className="justify-start truncate px-2 font-normal"
+                  onClick={() => open(notebook.id)}
+                  size="sm"
+                  type="button"
+                  variant="ghost"
+                >
+                  <span className="truncate">{title}</span>
+                </Button>
+                <Button
+                  aria-label={`Duplicate ${title}`}
+                  className="text-muted-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                  onClick={() => run("duplicate_notebook", { id: notebook.id })}
+                  size="icon-sm"
+                  title="Duplicate"
+                  type="button"
+                  variant="ghost"
+                >
+                  <CopyIcon />
+                </Button>
+                <Button
+                  aria-label={`Delete ${title}`}
+                  className="text-muted-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                  onClick={() =>
+                    setPendingDelete({
+                      id: notebook.id,
+                      kind: "notebook",
+                      title,
+                    })
+                  }
+                  size="icon-sm"
+                  title="Delete"
+                  type="button"
+                  variant="ghost"
+                >
+                  <XIcon />
+                </Button>
+              </div>
+            );
+          })}
         </nav>
         <div className="mt-auto hidden flex-col gap-1 md:flex">
           <Separator className="mb-2" />
@@ -331,21 +334,10 @@ export default function App() {
       <main className="min-w-0">
         {openNotebook ? (
           <>
-            <header className="mx-auto flex max-w-[900px] items-center gap-3 px-6 pt-6 pb-2 md:px-[52px]">
-              <Input
-                aria-label="Notebook title"
-                className="h-8 flex-1 border-transparent bg-transparent px-1 font-semibold shadow-none"
-                onChange={(e) =>
-                  run("rename_notebook", {
-                    id: openNotebook.id,
-                    name: e.target.value,
-                  })
-                }
-                value={openNotebook.title}
-              />
+            <header className="mx-auto flex max-w-[900px] justify-end px-6 pt-6 pb-2 md:px-[52px]">
               <Button
                 onClick={() =>
-                  download(`${openNotebook.title}.json`, openNotebook)
+                  download(`${notebookTitle(openNotebook)}.json`, openNotebook)
                 }
                 size="sm"
                 type="button"

@@ -98,9 +98,9 @@ export function findBlock(
 interface InlineNode {
   type?: unknown;
   text?: unknown;
-  label?: unknown;
+  name?: unknown;
   varId?: unknown;
-  props?: { label?: unknown; varId?: unknown };
+  props?: { name?: unknown; varId?: unknown };
   content?: unknown;
 }
 
@@ -119,10 +119,11 @@ export function inlineRefVarId(node: unknown): string | undefined {
   return typeof varId === "string" ? varId : undefined;
 }
 
-export function inlineRefLabel(node: unknown): string | undefined {
+/** The variable name a reference displays. Kept in step with the variable by `renameVariable`. */
+export function inlineRefName(node: unknown): string | undefined {
   const ref = node as InlineNode;
-  const label = ref.props?.label ?? ref.label;
-  return typeof label === "string" ? label : undefined;
+  const name = ref.props?.name ?? ref.name;
+  return typeof name === "string" ? name : undefined;
 }
 
 /** Every inline reference inside one block's own content, not its children. */
@@ -151,7 +152,7 @@ export function inlineRefs(block: ModeloBlock): InlineNode[] {
   return refs;
 }
 
-/** The plain text of a block's inline content. A reference reads as `@label`. */
+/** The plain text of a block's inline content. A reference reads as `@name`. */
 export function blockText(block: ModeloBlock): string {
   const source = block as Record<string, unknown>;
   const content = source.content ?? source.inline;
@@ -170,7 +171,7 @@ export function blockText(block: ModeloBlock): string {
     }
     const inline = node as InlineNode;
     if (isInlineRef(inline)) {
-      return `@${inlineRefLabel(inline) || inlineRefVarId(inline) || ""}`;
+      return `@${inlineRefName(inline) || inlineRefVarId(inline) || ""}`;
     }
     if (typeof inline.text === "string") {
       return inline.text;
@@ -183,12 +184,11 @@ export function blockText(block: ModeloBlock): string {
   return content.map(render).join("");
 }
 
-/** The document BlockNote creates for an empty notebook: one blank paragraph. */
-export function isBlankDocument(document: ModeloDocument): boolean {
+/** The empty paragraph BlockNote leaves behind: no text, no references. */
+export function isBlankParagraph(block: ModeloBlock): boolean {
   return (
-    document.length === 1 &&
-    document[0].type === "paragraph" &&
-    blockText(document[0]) === "" &&
-    inlineRefs(document[0]).length === 0
+    block.type === "paragraph" &&
+    blockText(block) === "" &&
+    inlineRefs(block).length === 0
   );
 }

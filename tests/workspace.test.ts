@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import { toEditorBlocks } from "../src/engine/portable";
+import { UNTITLED } from "../src/engine/title";
 import {
   createNotebook,
   deleteNotebook,
   duplicateNotebook,
   loadWorkspace,
+  notebookTitle,
   renameNotebook,
   replaceNotebookBlocks,
   saveWorkspace,
@@ -37,11 +39,15 @@ describe("workspace persistence", () => {
     edited.notebooks = edited.notebooks.filter(
       (n) => n.id !== "founders-runway-plan"
     );
-    edited.notebooks[0].title = "My changed model";
-    saveWorkspace(edited, storage);
+    const renamed = renameNotebook(
+      edited,
+      edited.notebooks[0].id,
+      "My changed model"
+    );
+    saveWorkspace(renamed, storage);
     const restored = loadWorkspace(storage);
     expect(restored.notebooks).toHaveLength(2);
-    expect(restored.notebooks[0].title).toBe("My changed model");
+    expect(notebookTitle(restored.notebooks[0])).toBe("My changed model");
     expect(
       restored.notebooks.some((n) => n.id === "founders-runway-plan")
     ).toBe(false);
@@ -81,7 +87,7 @@ describe("workspace persistence", () => {
     });
     expect(blocks[2].content).toEqual([
       { styles: {}, text: "Revenue is ", type: "text" },
-      { props: { label: "revenue", varId: "revenue-id" }, type: "variableRef" },
+      { props: { name: "revenue", varId: "revenue-id" }, type: "variableRef" },
       { styles: {}, text: "; ", type: "text" },
       { styles: {}, text: "@missing", type: "text" },
       { styles: {}, text: " stays literal.", type: "text" },
@@ -93,25 +99,26 @@ describe("workspace reducers", () => {
   it("create, duplicate, rename, and delete without touching other notebooks", () => {
     const base = seededWorkspace();
     const created = createNotebook(base, "  ", "new-id");
-    expect(created.notebook).toMatchObject({
-      blocks: [],
-      id: "new-id",
-      title: "Untitled",
-    });
+    // A blank name still produces a notebook that opens with its own heading.
+    expect(created.notebook).toMatchObject({ id: "new-id", scenarios: [] });
+    expect(created.notebook.blocks).toEqual([
+      { inline: [UNTITLED], level: 1, type: "heading" },
+    ]);
     expect(created.workspace.notebooks).toHaveLength(4);
     expect(base.notebooks).toHaveLength(3);
 
-    const copied = duplicateNotebook(
-      created.workspace,
-      base.notebooks[0],
-      "copy-id"
+    const [source] = base.notebooks;
+    const copied = duplicateNotebook(created.workspace, source, "copy-id");
+    expect(notebookTitle(copied.notebook)).toBe(
+      `${notebookTitle(source)} copy`
     );
-    expect(copied.notebook.title).toBe(`${base.notebooks[0].title} copy`);
-    expect(copied.notebook.blocks).toEqual(base.notebooks[0].blocks);
-    expect(copied.notebook.blocks).not.toBe(base.notebooks[0].blocks);
+    expect(copied.notebook.blocks.slice(1)).toEqual(source.blocks.slice(1));
+    expect(copied.notebook.blocks).not.toBe(source.blocks);
 
+    // A blank name is not a rename; the copy keeps the title it had.
     const renamed = renameNotebook(copied.workspace, "copy-id", "  ");
-    expect(renamed.notebooks.at(-1)?.title).toBe(copied.notebook.title);
+    const [kept] = renamed.notebooks.slice(-1);
+    expect(notebookTitle(kept)).toBe(notebookTitle(copied.notebook));
 
     const deleted = deleteNotebook(renamed, "new-id");
     expect(deleted.notebooks.map((notebook) => notebook.id)).not.toContain(

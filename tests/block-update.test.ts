@@ -98,8 +98,8 @@ describe("planBlockUpdate", () => {
   });
 
   it("plans a rename separately from the prop change and refuses a taken name", () => {
-    expect(plan("number", { label: "Cost", name: "cost" })).toMatchObject({
-      props: { label: "Cost" },
+    expect(plan("number", { name: "cost", value: 12 })).toMatchObject({
+      props: { value: 12 },
       rename: { name: "cost", varId: "price-id" },
     });
     expect(plan("number", { name: "growth" })).toMatchObject({

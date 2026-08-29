@@ -1,7 +1,12 @@
 import { isSymbolNode, SymbolNode } from "mathjs";
 
 import type { ModeloDocument } from "../model";
-import { isFormulaBlockType, mapBlocks } from "./document";
+import {
+  isFormulaBlockType,
+  isInlineRef,
+  inlineRefVarId,
+  mapBlocks,
+} from "./document";
 import { defaultFormulaEngine } from "./evaluate";
 import type { FormulaEngine } from "./evaluate";
 import {
@@ -31,6 +36,38 @@ function rewriteFormula(
   }
 }
 
+/**
+ * Rewrites the name every inline reference to `varId` displays. The name is
+ * stored on the chip so `blockText` stays a block-local walk.
+ */
+function rewriteRefs(
+  content: unknown,
+  varId: string,
+  newName: string
+): unknown {
+  if (!Array.isArray(content)) {
+    return content;
+  }
+  let changed = false;
+  const next = content.map((node) => {
+    if (isInlineRef(node) && inlineRefVarId(node) === varId) {
+      changed = true;
+      const ref = node as { props?: Record<string, unknown> };
+      return { ...ref, props: { ...ref.props, name: newName } };
+    }
+    const nested = node as { content?: unknown };
+    if (nested && typeof nested === "object" && Array.isArray(nested.content)) {
+      const inner = rewriteRefs(nested.content, varId, newName);
+      if (inner !== nested.content) {
+        changed = true;
+        return { ...nested, content: inner };
+      }
+    }
+    return node;
+  });
+  return changed ? next : content;
+}
+
 /** Renames a variable by stable id and immutably rewrites exact formula symbols. */
 export function renameVariable(
   document: ModeloDocument,
@@ -49,9 +86,13 @@ export function renameVariable(
   }
 
   const renamed = mapBlocks(document, (block) => {
-    const props = block.props as Record<string, unknown> | undefined;
+    const { content } = block as { content?: unknown };
+    const nextContent = rewriteRefs(content, varId, newName);
+    const withRefs =
+      nextContent === content ? block : { ...block, content: nextContent };
+    const props = withRefs.props as Record<string, unknown> | undefined;
     if (!props) {
-      return block;
+      return withRefs;
     }
     let nextProps = props;
     if (props.varId === varId) {
@@ -63,7 +104,7 @@ export function renameVariable(
         formula: rewriteFormula(props.formula, target.name, newName, engine),
       };
     }
-    return nextProps === props ? block : { ...block, props: nextProps };
+    return nextProps === props ? withRefs : { ...withRefs, props: nextProps };
   });
 
   projectDocument(renamed);

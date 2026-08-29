@@ -3,6 +3,12 @@ import type { FormulaEngine } from "../engine/evaluate";
 import { toEditorBlocks } from "../engine/portable";
 import type { PortableInline } from "../engine/portable";
 import { renameVariable } from "../engine/rename";
+import {
+  isTitleBlock,
+  TITLE_HEADING_LEVEL,
+  titleBlock,
+  UNTITLED,
+} from "../engine/title";
 import { coerceInputValue } from "../engine/variable";
 import type { ModeloBlock } from "../model";
 import type { EditorPort } from "./port";
@@ -14,6 +20,55 @@ import type { EditorPort } from "./port";
  * the tool table. Each runs inside `port.transact`, so the invariant "every
  * mutation goes through one transaction" is kept here and not by convention.
  */
+
+/**
+ * Puts the title heading back when the document has lost it.
+ *
+ * A person can delete it by typing, so the editor calls this on every change.
+ * Returns true when the document had to be repaired.
+ */
+export function ensureTitleBlock(port: EditorPort): boolean {
+  const [first] = port.document;
+  if (isTitleBlock(first)) {
+    return false;
+  }
+  port.transact(() => {
+    if (!first) {
+      port.replaceDocument(toEditorBlocks([titleBlock(UNTITLED)]));
+      return;
+    }
+    // A heading, or the empty paragraph BlockNote leaves behind, becomes the
+    // title. Real prose keeps its own block and the title goes above it.
+    const reusable =
+      first.type === "heading" ||
+      (first.type === "paragraph" && blockText(first) === "");
+    if (reusable) {
+      port.updateBlock(first.id, {
+        props: { level: TITLE_HEADING_LEVEL },
+        type: "heading",
+      });
+      return;
+    }
+    port.insertBlocks(
+      toEditorBlocks([titleBlock(UNTITLED)]),
+      first.id,
+      "before"
+    );
+  });
+  return true;
+}
+
+/** Writes the notebook title into the document's title heading. */
+export function setNotebookTitle(port: EditorPort, title: string): void {
+  ensureTitleBlock(port);
+  const [first] = port.document;
+  const [converted] = toEditorBlocks([titleBlock(title)]);
+  port.transact(() =>
+    port.updateBlock(first.id, {
+      content: (converted as { content?: unknown }).content,
+    })
+  );
+}
 
 export function setBlockProps(
   port: EditorPort,
@@ -78,11 +133,11 @@ interface TextRun {
 export function insertReference(
   port: EditorPort,
   block: ModeloBlock,
-  ref: { varId: string; label: string },
+  ref: { varId: string; name: string },
   offset?: number
 ): void {
   const chip = {
-    props: { label: ref.label, varId: ref.varId },
+    props: { name: ref.name, varId: ref.varId },
     type: "variableRef",
   };
   const existing = (block as { content?: unknown }).content;

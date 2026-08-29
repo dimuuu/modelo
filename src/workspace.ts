@@ -5,6 +5,7 @@ import { portableBlockSchema } from "./engine/portable";
 import type { PortableBlock } from "./engine/portable";
 import { scenarioSchema } from "./engine/scenarios";
 import type { Scenario } from "./engine/scenarios";
+import { readTitle, setTitleIn, titleBlock } from "./engine/title";
 
 /**
  * The workspace catalogue: which notebooks exist, and how they persist.
@@ -23,7 +24,6 @@ export const notebookRecordSchema = z.object({
   description: z.string().optional(),
   id: z.string(),
   scenarios: z.array(scenarioSchema),
-  title: z.string(),
   updatedAt: z.string(),
 });
 
@@ -88,6 +88,11 @@ export function saveWorkspace(
 
 // --- Catalogue reducers ------------------------------------------------------
 
+/** A notebook's title, which is the text of its first block. */
+export function notebookTitle(notebook: NotebookRecord): string {
+  return readTitle(notebook.blocks);
+}
+
 export function findNotebook(
   workspace: Workspace,
   id: string | null
@@ -116,10 +121,9 @@ export function createNotebook(
   id: string
 ): { workspace: Workspace; notebook: NotebookRecord } {
   const notebook: NotebookRecord = {
-    blocks: [],
+    blocks: [titleBlock(title)],
     id,
     scenarios: [],
-    title: title.trim() || "Untitled",
     updatedAt: now(),
   };
   return {
@@ -141,10 +145,11 @@ export function duplicateNotebook(
   id: string,
   title?: string
 ): { workspace: Workspace; notebook: NotebookRecord } {
+  const copied = clone(source);
   const notebook: NotebookRecord = {
-    ...clone(source),
+    ...copied,
+    blocks: setTitleIn(copied.blocks, title ?? `${notebookTitle(source)} copy`),
     id,
-    title: title ?? `${source.title} copy`,
     updatedAt: now(),
   };
   return {
@@ -153,13 +158,17 @@ export function duplicateNotebook(
   };
 }
 
+/** Rewrites the title heading. A blank name leaves the notebook as it was. */
 export function renameNotebook(
   workspace: Workspace,
   id: string,
   title: string
 ): Workspace {
+  if (!title.trim()) {
+    return workspace;
+  }
   return replaceNotebook(workspace, id, (notebook) => ({
-    title: title.trim() || notebook.title,
+    blocks: setTitleIn(notebook.blocks, title),
   }));
 }
 

@@ -1,10 +1,11 @@
-import { isBlankDocument } from "../engine/document";
+import { isBlankParagraph } from "../engine/document";
 import type { FormulaEngine } from "../engine/evaluate";
 import type { FormatDefaults } from "../engine/format";
 import { describeNotebook, diffNotebooks } from "../engine/notebook";
 import type { MutationReport, Notebook } from "../engine/notebook";
 import { resolveVariable } from "../engine/references";
 import type { ReferenceQuery } from "../engine/references";
+import { isTitleBlock } from "../engine/title";
 import type { ModeloBlock, ModeloDocument, ProjectedVariable } from "../model";
 import { fault } from "./errors";
 import { createMemoryPort } from "./port";
@@ -89,27 +90,33 @@ export class NotebookSession {
   }
 
   /**
-   * Inserts blocks at an anchor, or appends them. A notebook that is still the
-   * single blank paragraph BlockNote starts with is replaced, not appended to.
+   * Inserts blocks at an anchor, or appends them. A notebook that is still
+   * its title plus the blank paragraph BlockNote starts with loses that
+   * paragraph, so new content does not open with an empty line.
    */
   insert(blocks: ModeloDocument, anchor: InsertAnchor = {}): ModeloDocument {
     const { editor } = this;
+    const placement = anchor.placement ?? "after";
     if (anchor.referenceBlockId) {
-      this.requireBlock(anchor.referenceBlockId);
-      return editor.insertBlocks(
-        blocks,
-        anchor.referenceBlockId,
-        anchor.placement ?? "after"
-      );
-    }
-    if (isBlankDocument(editor.document)) {
-      return editor.replaceDocument(blocks);
+      const reference = this.requireBlock(anchor.referenceBlockId);
+      if (placement === "before" && isTitleBlock(reference)) {
+        fault("TITLE_BLOCK", "Nothing goes above the notebook title.");
+      }
+      return editor.insertBlocks(blocks, anchor.referenceBlockId, placement);
     }
     const last = editor.document.at(-1);
     if (!last) {
       fault("EMPTY_DOCUMENT", "The notebook has no blocks to append after.");
     }
-    return editor.insertBlocks(blocks, last.id, "after");
+    const body = isTitleBlock(editor.document[0])
+      ? editor.document.slice(1)
+      : editor.document;
+    const blank = body.every(isBlankParagraph) ? body : [];
+    const inserted = editor.insertBlocks(blocks, last.id, "after");
+    if (blank.length) {
+      editor.removeBlocks(blank.map((block) => block.id));
+    }
+    return inserted;
   }
 
   requireBlock(id: string): ModeloBlock {

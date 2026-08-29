@@ -45,7 +45,6 @@ export const inputFieldsSchema = {
   currency: z.string().optional(),
   decimals: decimalsSchema.optional(),
   format: formatSchema.optional(),
-  label: z.string().optional(),
   locale: z.string().optional(),
   max: z.number().optional(),
   min: z.number().optional(),
@@ -61,7 +60,6 @@ export const INPUT_PROP_DEFAULTS = {
   currency: "EUR",
   decimals: DECIMALS_AUTO,
   format: "number",
-  label: "Variable",
   locale: "",
   name: "variable",
   unit: "",
@@ -71,7 +69,6 @@ export const INPUT_PROP_DEFAULTS = {
 
 export const FORMULA_PROP_DEFAULTS = {
   formula: "1 + 1",
-  label: "Formula",
   name: "result",
   varId: "",
 } as const;
@@ -211,10 +208,6 @@ export function impliedFormat(input: Formatted): FormatKind {
   return "number";
 }
 
-function titleCase(kind: string): string {
-  return kind[0].toUpperCase() + kind.slice(1);
-}
-
 /** Props for a block the slash menu inserts. `makeId` supplies the varId. */
 export function newVariableProps(
   kind: VariableBlockType,
@@ -223,7 +216,6 @@ export function newVariableProps(
   const id = makeId();
   const suffix = id.slice(0, 4);
   const base = {
-    label: kind === "boolean" ? "Toggle" : titleCase(kind),
     name: `variable_${suffix}`,
     varId: id,
   };

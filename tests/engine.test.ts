@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { blockText } from "../src/engine/document";
 import { evaluateModel } from "../src/engine/evaluate";
 import { formatValue } from "../src/engine/format";
 import {
@@ -7,7 +8,7 @@ import {
   projectDocument,
 } from "../src/engine/projector";
 import { renameVariable } from "../src/engine/rename";
-import type { ModeloDocument } from "../src/model";
+import type { ModeloBlock, ModeloDocument } from "../src/model";
 
 const document: ModeloDocument = [
   {
@@ -129,6 +130,30 @@ describe("Modelo deterministic engine", () => {
       status: "ok",
       value: 750,
     });
+  });
+
+  it("renames the inline references that display a variable", () => {
+    const renamed = renameVariable(
+      [
+        ...document,
+        {
+          content: [
+            { styles: {}, text: "We earn ", type: "text" },
+            {
+              props: { name: "revenue", varId: "revenue-id" },
+              type: "variableRef",
+            },
+            { styles: {}, text: " today.", type: "text" },
+          ],
+          id: "prose",
+          type: "paragraph",
+        },
+      ],
+      "revenue-id",
+      "sales"
+    );
+    const paragraph = renamed.find((block) => block.id === "prose");
+    expect(blockText(paragraph as ModeloBlock)).toBe("We earn @sales today.");
   });
 
   it("shows a missing reference after a variable is deleted rather than substituting zero", () => {

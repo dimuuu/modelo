@@ -45,7 +45,7 @@ const referencedDocument: ModeloDocument = [
   },
   {
     content: [
-      { props: { label: "revenue", varId: "revenue-id" }, type: "variableRef" },
+      { props: { name: "revenue", varId: "revenue-id" }, type: "variableRef" },
     ],
     id: "paragraph",
     type: "paragraph",
@@ -54,7 +54,7 @@ const referencedDocument: ModeloDocument = [
     children: [
       {
         id: "nested",
-        inline: [{ label: "revenue", type: "ref", varId: "revenue-id" }],
+        inline: [{ name: "revenue", type: "ref", varId: "revenue-id" }],
         type: "paragraph",
       },
     ],

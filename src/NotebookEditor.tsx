@@ -12,9 +12,11 @@ import type { FormatDefaults } from "./engine/format";
 import { describeNotebook } from "./engine/notebook";
 import { fromEditorBlocks, toEditorBlocks } from "./engine/portable";
 import type { PortableBlock } from "./engine/portable";
+import { withTitleBlock } from "./engine/title";
 import { newVariableProps } from "./engine/variable";
 import type { ModeloDocument } from "./model";
 import { createBlockNotePort } from "./notebook/blocknote-port";
+import { ensureTitleBlock } from "./notebook/mutations";
 import type { EditorPort } from "./notebook/port";
 import type { NotebookRecord } from "./workspace";
 
@@ -49,12 +51,8 @@ export function NotebookEditor({
   // BlockNote reads initialContent once, when it creates the editor, and owns
   // the document from then on. The parent keys this component by notebook id,
   // so switching notebooks remounts with fresh content.
-  const converted = toEditorBlocks(notebook.blocks);
-  const initial = converted.length
-    ? converted
-    : [{ content: "", type: "paragraph" }];
   const editor = useCreateBlockNote({
-    initialContent: initial as never,
+    initialContent: toEditorBlocks(withTitleBlock(notebook.blocks)) as never,
     schema: modeloSchema,
   });
   const port = useMemo(() => createBlockNotePort(editor), [editor]);
@@ -109,7 +107,7 @@ export function NotebookEditor({
             onItemClick: () =>
               editor.insertInlineContent([
                 {
-                  props: { label: variable.name, varId: variable.varId },
+                  props: { name: variable.name, varId: variable.varId },
                   type: "variableRef",
                 },
               ] as never),
@@ -128,6 +126,9 @@ export function NotebookEditor({
           theme="light"
           slashMenu={false}
           onChange={() => {
+            // Typing can delete the title heading; put it back before anyone
+            // reads the document.
+            ensureTitleBlock(port);
             // A fresh array, so React sees a new document version.
             const next = [...port.document];
             setDocument(next);

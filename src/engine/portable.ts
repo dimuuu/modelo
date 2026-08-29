@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { ModeloBlock, ModeloDocument } from "../model";
 import {
   INPUT_BLOCK_TYPES,
-  inlineRefLabel,
+  inlineRefName,
   inlineRefVarId,
   isInlineRef,
   isProseBlockType,
@@ -41,7 +41,7 @@ const HEADING_LEVELS = { max: 3, min: 1 };
 export const inlineSchema = z.union([
   z.string(),
   z.strictObject({
-    label: z.string(),
+    name: z.string().min(1),
     type: z.literal("ref"),
     varId: z.string().min(1),
   }),
@@ -61,7 +61,6 @@ export const inputBlockSchema = z.strictObject({
 export const formulaBlockSchema = z.strictObject({
   ...blockIdentity,
   formula: expressionSchema,
-  label: z.string().optional(),
   name: variableNameSchema,
   type: z.literal("formula"),
   varId: z.string().min(1).optional(),
@@ -132,7 +131,6 @@ type AnyBlock = Record<string, unknown> & { id?: string; type: string };
 const VARIABLE_KEYS = [
   "varId",
   "name",
-  "label",
   "value",
   "formula",
   "format",
@@ -166,7 +164,7 @@ export function inlineContentFromText(
     }
     inline.push(
       Object.hasOwn(idByName, name)
-        ? { label: name, type: "ref", varId: idByName[name] }
+        ? { name, type: "ref", varId: idByName[name] }
         : match[0]
     );
     start = match.index + match[0].length;
@@ -193,9 +191,9 @@ function toEditorInline(item: PortableInline): unknown {
     return { styles: {}, text: item, type: "text" };
   }
   if (item.type === "ref") {
-    const ref = item as { varId: string; label: string };
+    const ref = item as { varId: string; name: string };
     return {
-      props: { label: ref.label, varId: ref.varId },
+      props: { name: ref.name, varId: ref.varId },
       type: "variableRef",
     };
   }
@@ -281,7 +279,7 @@ function fromEditorInline(node: unknown): PortableInline {
   }
   if (isInlineRef(node)) {
     return {
-      label: inlineRefLabel(node) ?? "",
+      name: inlineRefName(node) ?? "",
       type: "ref",
       varId: inlineRefVarId(node) ?? "",
     };

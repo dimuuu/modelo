@@ -1,72 +1,39 @@
 # Modelo — working notes
 
-Modelo is a local-first notebook where prose and a calculation model are the same document. React 19 + Vite, no backend, no auth, no router.
+Modelo is a local-first notebook where prose and a calculation model are the same document. React 19 and Vite. No backend, no auth, no router.
 
-Ultracite's own standards live in [.claude/CLAUDE.md](./.claude/CLAUDE.md). This file covers what is specific to Modelo. The domain vocabulary is in [CONTEXT.md](./CONTEXT.md); use those names in code and in conversation.
+Read the code for how it works. Read these files for what the code cannot say:
 
-## The one invariant
+- [CONTEXT.md](./CONTEXT.md) — the domain vocabulary. Use these names in code, in tests, and in conversation.
+- [CONTRIBUTING.md](./CONTRIBUTING.md) — the module map, the checks, and the recipes for adding a block type or a tool.
+- [DECISIONS.md](./DECISIONS.md) — open questions, the assumptions v1 rests on, and why the architecture is this way.
+- [.claude/CLAUDE.md](./.claude/CLAUDE.md) — Ultracite's own standards.
 
-`editor.document` is the only source of truth for an open notebook.
+## How to work here
 
-Everything else is derived from it, once, by `describeNotebook()`:
-
-1. `inspectDocument()` walks the blocks and builds the variable registry. An invalid block becomes an issue on that block, not a failure of the whole document.
-2. `evaluateModel()` resolves the formula graph by dependency, not block order.
-3. React paints the result through `ModelProvider`.
-4. `onChange` converts the document to the portable format and persists it.
-
-Do not add a parallel document store, a Zustand slice, or a server copy. React state holds the workspace catalogue and the id of the open notebook — nothing more.
-
-Every mutation, human or agent, goes through an `EditorPort` inside one transaction. `src/notebook/mutations.ts` holds the mutations both sides call.
-
-## Layout
-
-| Path | Holds |
-| --- | --- |
-| `src/engine/` | Editor-independent logic. No React, no BlockNote imports. Import modules by name; there is no barrel. |
-| `src/engine/document.ts` | The block vocabulary and the document walk. Add a block type here first. |
-| `src/engine/variable.ts` | The shape of one variable and its rules: identifiers, decimals, select options, slider clamp, format helpers. |
-| `src/engine/portable.ts` | The portable notebook format. `toEditorBlocks` and `fromEditorBlocks` are inverses. |
-| `src/engine/notebook.ts` | `describeNotebook` and `diffNotebooks`: the notebook value and the mutation report. |
-| `src/engine/block-update.ts` | The `update_block` policy as a table, and `planBlockUpdate`. |
-| `src/engine/section.ts` | The section schema and `buildSectionBlocks`. |
-| `src/notebook/port.ts` | `EditorPort`, the seam, plus the in-memory adapter for tests and `dry_run`. |
-| `src/notebook/blocknote-port.ts` | The BlockNote adapter. The only file that casts the editor to `any`. |
-| `src/notebook/session.ts` | `NotebookSession`: `current()`, `mutate()`, `preview()`, `insert()`. |
-| `src/notebook/mutations.ts` | Mutations shared by block components and tools. |
-| `src/webmcp/tools.ts` | The tool table: name, schema, description, and `run` for every tool. `runTool` is the test surface. |
-| `src/webmcp/schemas.ts` | Tool argument schemas, composed from the engine's schemas and published as JSON Schema. |
-| `src/webmcp/ModeloTools.tsx` | Registers the table with WebMCP, one component per row. |
-| `src/workspace.ts` | Persistence and the catalogue reducers. |
-| `src/App.tsx` | The shell. Sidebar, header, dialogs. Every button calls `runTool`. |
-| `src/NotebookEditor.tsx` | The BlockNote surface for one notebook. |
-| `src/editor.tsx` | The BlockNote schema: the five model blocks and the inline reference chip. |
-| `src/components/ui/` | Vendored shadcn/ui output. Do not hand-edit; it is regenerated. |
-
-## Rules that matter here
-
-- **Validate at the boundary.** Anything from an agent, `localStorage`, or an imported file is parsed with zod first. Domain schemas live next to their module (`section.ts`, `block-update.ts`, `variable.ts`); `src/webmcp/schemas.ts` composes them into tool arguments. Let `z.infer` produce the type. Never hand-write a type that a schema already describes.
-- **Never substitute zero.** A missing or broken variable renders `missing` or an error. Silent zeros produce wrong models.
-- **Rename by symbol, not by text.** `renameVariable` parses each formula and swaps the matching `SymbolNode`.
-- **One vocabulary.** Ask `document.ts` whether a block is an input, a formula, or prose. Ask `variable.ts` how to clamp, coerce, or format. Do not add a local `Set` of type names.
-- **Tools run against plain data.** A tool must work through `createMemoryPort`. If it needs BlockNote, the logic is in the wrong place.
+- **The product has not launched.** There is no user and no stored data to protect. Delete the old path. Do not add a fallback, a migration, an alias, or an optional field to keep it alive.
+- **Take the simplest solution that works.** Prefer deleting code to adding an option. If a change needs a new layer, say why before you build it.
+- **`editor.document` is the only source of truth for an open notebook.** Everything else is derived from it. Do not add a second document store, a Zustand slice, or a server copy.
+- **Every mutation goes through `EditorPort`, inside one transaction.** Humans and agents call the same functions in `src/notebook/mutations.ts`.
+- **Validate at the boundary.** Parse anything from an agent, from `localStorage`, or from an imported file with zod first. Let `z.infer` produce the type. Never hand-write a type a schema already describes.
+- **Never substitute zero.** A missing or broken variable renders `missing` or an error. A silent zero produces a wrong model.
+- **One vocabulary.** Ask `document.ts` whether a block is an input, a formula, or prose. Ask `variable.ts` how to clamp, coerce, or format. Do not keep a local `Set` of type names.
 - **`aria-label` is the test contract.** The app tests query by label and role. Changing a label breaks tests on purpose.
-- **Tailwind for everything visual.** The only stylesheet is `src/blocknote-theme.css`, which exists because BlockNote paints its own editor surface and cannot be reached with utility classes.
+- **Tailwind for everything visual.** The one stylesheet is `src/blocknote-theme.css`.
+- **Do not hand-edit `src/components/ui/`.** The shadcn CLI regenerates it.
 
 ## Commands
 
 ```bash
 pnpm dev      # vite
-pnpm test     # vitest, 96 tests
+pnpm test     # vitest
 pnpm check    # oxlint via ultracite; must exit 0
 pnpm fix      # oxlint --fix and oxfmt --write
 pnpm build    # tsc -b && vite build
 ```
 
-Run `pnpm fix` before committing. `oxlint.config.ts` documents every overridden rule and why; read the comment before adding another override.
-
-One warning is kept on purpose: the `any` in `src/notebook/blocknote-port.ts`, where BlockNote's editor meets the port. Errors are not allowed.
+Run `pnpm fix` before committing. `oxlint.config.ts` explains every overridden rule; read the comment there before adding another override. One warning stands on purpose: the `any` in `src/notebook/blocknote-port.ts`, where BlockNote's editor meets the port. Errors are not allowed.
 
 ## Environment
 
-The public npm registry is blocked on this machine. Installs go through the Artifactory proxy already configured in `~/.npmrc`. That mirror lags the public registry by roughly one version, so a brand-new release may not resolve; pick the newest version the mirror carries.
+The public npm registry is blocked on this machine. Installs go through the Artifactory proxy in `~/.npmrc`. That mirror lags the public registry by about one version, so pick the newest version it carries.

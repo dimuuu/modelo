@@ -31,7 +31,6 @@ const { locale: _locale, ...agentInputFields } = inputFieldsSchema;
 export const inputFields = {
   ...agentInputFields,
   currency: currencySchema.optional(),
-  label: z.string().min(1).optional(),
   unit: unitSchema.optional(),
 };
 
@@ -42,7 +41,6 @@ export const sectionInputSchema = z.strictObject({
 
 export const sectionFormulaSchema = z.strictObject({
   formula: expressionSchema,
-  label: z.string().min(1).optional(),
   name: variableNameSchema,
 });
 
@@ -91,11 +89,10 @@ function inputBlock(
   id: string,
   varId: string
 ): PortableBlock {
-  const { kind, value, label, name, ...rest } = input;
+  const { kind, value, name, ...rest } = input;
   const format = impliedFormat(input);
   const block: Record<string, unknown> = {
     id,
-    label: label ?? name,
     name,
     type: kind,
     value: coerceInputValue(kind, value),
@@ -120,7 +117,6 @@ function formulaBlock(
   return {
     formula: formula.formula,
     id,
-    label: formula.label ?? formula.name,
     name: formula.name,
     type: "formula",
     varId,

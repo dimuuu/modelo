@@ -23,9 +23,7 @@ describe("document composition", () => {
         type: "number",
       })),
       {
-        content: [
-          { props: { label: "a", varId: "a-id" }, type: "variableRef" },
-        ],
+        content: [{ props: { name: "a", varId: "a-id" }, type: "variableRef" }],
         id: "summary",
         type: "paragraph",
       },
@@ -80,9 +78,7 @@ function unitEconomics(): LooseBlock[] {
   const blocks = buildSectionBlocks(
     {
       body: "Revenue is @revenue and cost is @cost.\n\nMargin is @margin.",
-      formulas: [
-        { formula: "revenue - cost", label: "Margin", name: "margin" },
-      ],
+      formulas: [{ formula: "revenue - cost", name: "margin" }],
       heading: "Unit economics",
       inputs: [
         {
@@ -121,15 +117,15 @@ describe("write_section block builder", () => {
     const blocks = unitEconomics();
     expect(blocks[1].inline).toEqual([
       "Revenue is ",
-      { label: "revenue", type: "ref", varId: blocks[3].varId },
+      { name: "revenue", type: "ref", varId: blocks[3].varId },
       " and cost is ",
-      { label: "cost", type: "ref", varId: "cost-id" },
+      { name: "cost", type: "ref", varId: "cost-id" },
       ".",
     ]);
     // `margin` is declared by this same call, so a forward reference still links.
     expect(blocks[2].inline).toEqual([
       "Margin is ",
-      { label: "margin", type: "ref", varId: blocks[4].varId },
+      { name: "margin", type: "ref", varId: blocks[4].varId },
       ".",
     ]);
   });

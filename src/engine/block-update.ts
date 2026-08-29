@@ -28,11 +28,9 @@ import {
 const HEADING_LEVELS = [1, 2, 3] as const;
 const headingLevel = z.union(HEADING_LEVELS.map((level) => z.literal(level)));
 const blockId = z.string().min(1);
-const label = z.string().min(1);
 
 const namedValueFields = {
   id: blockId,
-  label: label.optional(),
   name: variableNameSchema.optional(),
   value: z.number().optional(),
 };
@@ -64,7 +62,7 @@ export const updateBlockSchema = z.union([
 
 export type UpdateBlockArgs = z.infer<typeof updateBlockSchema>;
 
-const IDENTITY = ["name", "label", "value"] as const;
+const IDENTITY = ["name", "value"] as const;
 const DISPLAY = [
   "format",
   "currency",

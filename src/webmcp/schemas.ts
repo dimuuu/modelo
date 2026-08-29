@@ -93,7 +93,6 @@ export const notebookBlockSchema = z.union([
   z.strictObject({
     formula: expressionSchema,
     id: z.string().optional(),
-    label: z.string().min(1).optional(),
     name: variableNameSchema,
     type: z.literal("formula"),
   }),
@@ -139,7 +138,6 @@ export const replaceParagraphSchema = z.strictObject({
 
 export const insertInlineRefSchema = z.strictObject({
   blockId: blockId.describe("Paragraph block id."),
-  label: z.string().min(1).optional().describe("Optional displayed label."),
   offset: z
     .number()
     .int()

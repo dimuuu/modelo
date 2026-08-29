@@ -28,6 +28,7 @@ import {
 import type { Scenario } from "../engine/scenarios";
 import { buildSectionBlocks, sectionVariableNames } from "../engine/section";
 import type { Section } from "../engine/section";
+import { isTitleBlock, readTitle, TITLE_HEADING_LEVEL } from "../engine/title";
 import { coerceInputValue, impliedFormat } from "../engine/variable";
 import type { ModeloDocument } from "../model";
 import { fault, ModeloToolError } from "../notebook/errors";
@@ -36,6 +37,7 @@ import {
   renameVariableIn,
   replaceProse,
   setInputValue,
+  setNotebookTitle,
 } from "../notebook/mutations";
 import type { EditorPort } from "../notebook/port";
 import { NotebookSession } from "../notebook/session";
@@ -44,6 +46,7 @@ import {
   deleteNotebook,
   duplicateNotebook,
   findNotebook,
+  notebookTitle,
   renameNotebook,
   setNotebookScenarios,
 } from "../workspace";
@@ -116,6 +119,11 @@ export class ToolContext {
     );
   }
 
+  /** The open notebook's editor port, or null while none is open. */
+  editor(): EditorPort | null {
+    return this.runtime.editor();
+  }
+
   /** The open notebook's document, through its editor. */
   session(): NotebookSession {
     const editor = this.runtime.editor();
@@ -161,6 +169,18 @@ type ReportExtra = Record<string, unknown>;
 
 const scenarioSummary = ({ id, name }: Scenario) => ({ id, name });
 
+/** A notebook record as the agent sees it: the stored fields plus the title. */
+const recordView = (record: NotebookRecord) => ({
+  ...record,
+  title: notebookTitle(record),
+});
+
+/** The title heading of the open document, when it has one. */
+function titleBlockOf(session: NotebookSession) {
+  const [first] = session.document;
+  return isTitleBlock(first) ? first : undefined;
+}
+
 /** The `get_document` view: portable blocks, with prose flattened to text. */
 function agentBlock(portable: PortableBlock): Record<string, unknown> {
   const block = portable as Record<string, unknown> & { type: string };
@@ -204,6 +224,14 @@ function planOrFault(
   session: NotebookSession,
   args: UpdateBlockArgs
 ): UpdatePlan {
+  const { level } = args as { level?: number };
+  if (
+    level !== undefined &&
+    level !== TITLE_HEADING_LEVEL &&
+    titleBlockOf(session)?.id === args.id
+  ) {
+    fault("TITLE_BLOCK", "The notebook title stays a level 1 heading.");
+  }
   const plan = planBlockUpdate(
     session.current().projected,
     session.editor.getBlock(args.id),
@@ -290,10 +318,10 @@ const workspaceTools: ToolDefinition[] = [
       return {
         currency,
         locale,
-        notebooks: notebooks.map(({ id, title, updatedAt }) => ({
-          id,
-          title,
-          updatedAt,
+        notebooks: notebooks.map((notebook) => ({
+          id: notebook.id,
+          title: notebookTitle(notebook),
+          updatedAt: notebook.updatedAt,
         })),
         openNotebookId: workspace.openId(),
       };
@@ -327,7 +355,12 @@ const workspaceTools: ToolDefinition[] = [
       const notebook = created as NotebookRecord;
       workspace.open(notebook.id);
       const { currency, locale } = workspace.current();
-      return { ...notebook, composition: getComposition([]), currency, locale };
+      return {
+        ...recordView(notebook),
+        composition: getComposition([]),
+        currency,
+        locale,
+      };
     },
     schema: workspaceCreateSchema,
     scope: "workspace",
@@ -348,7 +381,7 @@ const workspaceTools: ToolDefinition[] = [
         copy = result.notebook;
         return result.workspace;
       });
-      return copy;
+      return recordView(copy as NotebookRecord);
     },
     schema: workspaceDuplicateSchema,
     scope: "workspace",
@@ -368,10 +401,17 @@ const workspaceTools: ToolDefinition[] = [
     scope: "workspace",
   }),
   tool({
-    description: "Rename a workspace notebook.",
+    description:
+      "Rename a workspace notebook by rewriting the title heading it opens with.",
     name: "rename_notebook",
     run: (context, { id, name }) => {
       context.requireRecord(id);
+      // The open notebook is owned by the editor, so it is retitled there.
+      const editor =
+        context.workspace.openId() === id ? context.editor() : null;
+      if (editor) {
+        setNotebookTitle(editor, name);
+      }
       context.workspace.update((current) => renameNotebook(current, id, name));
       return { id, name };
     },
@@ -399,7 +439,7 @@ const notebookTools: ToolDefinition[] = [
           previousId: blocks[index - 1]?.id ?? null,
         })),
         composition: getComposition(session.document),
-        notebook: { id: record.id, title: record.title },
+        notebook: { id: record.id, title: readTitle(session.document) },
       };
     },
     schema: emptySchema,
@@ -597,6 +637,13 @@ const notebookTools: ToolDefinition[] = [
       if (missing.length) {
         fault("NOT_FOUND", "Some blocks do not exist.", { ids: missing });
       }
+      const title = titleBlockOf(session);
+      if (title && ids.includes(title.id)) {
+        fault(
+          "TITLE_BLOCK",
+          "The notebook title cannot be removed. Rename it instead."
+        );
+      }
       return session.mutate((current) => {
         current.editor.removeBlocks(ids);
         return { removed: ids };
@@ -673,7 +720,7 @@ const notebookTools: ToolDefinition[] = [
     description:
       "Insert an inline reference to a notebook variable into a paragraph.",
     name: "insert_inline_ref",
-    run: (context, { blockId, variable, label, offset }) => {
+    run: (context, { blockId, variable, offset }) => {
       const session = context.session();
       const target = session.requireVariable(variable);
       const block = session.requireBlock(blockId);
@@ -681,7 +728,7 @@ const notebookTools: ToolDefinition[] = [
         insertReference(
           current.editor,
           block,
-          { label: label ?? target.name, varId: target.varId },
+          { name: target.name, varId: target.varId },
           offset
         );
         return { blockId, varId: target.varId };

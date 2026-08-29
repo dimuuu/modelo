@@ -1,56 +1,43 @@
 # Decisions
 
-## Needs Dmytro
+What the code cannot say for itself: the questions still open, the assumptions v1 rests on, and the alternative each architecture choice rejected.
 
-- **Public name and copy:** keep "Modelo" and the restrained one-line positioning, or tune the name and voice before submission?
-- **Persistence expectation:** v1 is deliberately browser-local. Decide whether a later version needs account sync or sharing, which would change the no-backend architecture.
-- **Units UX:** v1 accepts a display unit and leaves explicit conversions to MathJS formula expressions. Decide whether the editor should grow dedicated unit pickers and conversion controls.
-- **Import policy:** workspace import replaces the local workspace after validation. Decide whether import should merge instead.
-- **WebMCP test surface:** document tools disappear on the workspace home by design; workspace tools remain. Confirm this is the desired demo flow.
-- **Production domain:** use Vercel's `modelo.vercel.app` alias, or attach a custom domain.
-- **Dark mode:** shadcn ships a full dark palette in `src/index.css` and every component honours it, but nothing toggles `.dark` yet and `BlockNoteView` is pinned to `theme="light"`. Decide whether to finish it or drop the tokens.
+## Open questions
 
-## Assumptions made for v1
+- **Name and copy.** Keep "Modelo" and the one-line positioning, or change them before submission?
+- **Persistence.** v1 is browser-local on purpose. Accounts or sharing would need a backend.
+- **Units.** v1 takes a display unit and leaves conversion to a MathJS expression. Should the editor grow unit pickers?
+- **Import.** Import replaces the workspace after validation. Should it merge instead?
+- **Demo flow.** Notebook tools disappear on the workspace home. Is that the flow the demo should show?
+- **Domain.** Use `modelo.vercel.app`, or attach a custom domain?
+- **Dark mode.** `src/index.css` carries a full dark palette and every shadcn component honours it. Nothing toggles `.dark`, and `BlockNoteView` is pinned to `theme="light"`. Finish it, or delete the tokens?
 
-- Variable names are MathJS-safe identifiers (`letters/_`, then `letters/digits/_`) and case-sensitive.
-- Currency is formatting only; there is no live FX. Seed models use EUR.
-- Workspace display defaults are EUR and `es-ES`, and are required in storage. The product has not launched, so there is no compatibility path for older snapshots: a stored workspace that fails the schema falls back to the seeds.
-- Number, slider, and select blocks may set 0–8 fixed decimals. Without it, currency shows 0 decimals for integers and 2 for non-integers. A formula's display format comes from its units; a formula block stores no format fields.
-- Select option values are numeric; labels carry scenario meaning.
-- Deleting the final block is refused by BlockNote; deleting variables otherwise leaves formula errors and `missing` inline chips visible.
-- Multi-tab live synchronization, auth, sharing, locks, AI chat, and a backend are intentionally out of scope.
-- A Vitest + happy-dom smoke test is sufficient for the UI. The tools, the engine, and the portable format are tested without a DOM.
+## What v1 assumes
 
-## Architecture decisions
+- A variable name is a MathJS identifier. It starts with a letter or `_`, then takes letters, digits, or `_`. Names are case-sensitive.
+- Currency is formatting only. There is no live exchange rate. The seeds use EUR.
+- Workspace defaults are EUR and `es-ES`. A stored workspace that fails the schema falls back to the seeds.
+- Number, slider, and select blocks may fix 0 to 8 decimals. Without that, currency shows 0 decimals for a whole number and 2 for any other. A formula takes its format from its units.
+- Select option values are numbers. The labels carry the meaning.
+- BlockNote refuses to delete the last block. Deleting a variable leaves formula errors and `missing` chips on show.
+- Out of scope: multi-tab sync, auth, sharing, locks, AI chat, and a backend.
+- One Vitest and happy-dom smoke test covers the UI. The engine, the tools, and the portable format are tested without a DOM.
 
-- **One portable format.** Seeds, `localStorage`, exports, agent payloads, and `get_document` all use the same shape (`src/engine/portable.ts`). Before this, the editor's own block shape was persisted and read back through a converter that expected a different dialect, so prose was lost on every reload. `toEditorBlocks` and `fromEditorBlocks` are inverses and are tested as such.
-- **An editor port with two adapters.** Notebook logic talks to `EditorPort`, not to BlockNote. The in-memory adapter runs the same code in tests and for `dry_run`. Anything that cannot run against `createMemoryPort` does not belong in a tool.
-- **A tool table, not a hook per tool.** `src/webmcp/tools.ts` is the only description of a tool. Registration loops over it; the UI's buttons call `runTool` like an agent does. `useWebMCP` must be called at a component's top level, so `ModeloTools` renders one small component per row.
-- **Lenient projection.** `inspectDocument` keeps an invalid block as an issue on that block. A duplicate name marks the second block, not the whole document. `projectDocument` remains as the strict form for callers that need a clean model (rename).
-- **Domain schemas live with their module.** `variable.ts`, `section.ts`, and `block-update.ts` own their zod schemas; `src/webmcp/schemas.ts` composes them into tool arguments and publishes JSON Schema. `z.infer` produces every type.
-- **No compatibility code.** The product has not launched. Legacy block type names, the seed `props` dialect, the `bullet` alias, and optional-with-default storage fields were removed rather than supported.
+## Why the architecture is this way
 
-## Tooling decisions
+Each entry names the alternative it rejects. [CONTEXT.md](./CONTEXT.md) names the parts.
 
-- **Ultracite with oxlint and oxfmt.** oxfmt owns formatting. `pnpm check` must exit 0. Warnings are allowed and tracked below.
-- **shadcn/ui on the Base UI variant, not Radix.** Every control in the app is a shadcn component. The only remaining stylesheet is `src/blocknote-theme.css`, which binds BlockNote's own editor surface to the shadcn tokens; BlockNote paints that surface itself and cannot be reached with utility classes.
-- **zod at every boundary.** WebMCP tool arguments, `localStorage`, imported files, and the select-options JSON prop are parsed, not trusted.
-- **Registry.** The public npm registry is blocked on the primary machine, so installs use an Artifactory proxy that lags roughly one version. `@types/react-dom` is pinned to 19.2.4 for that reason, and the lockfile is resolved against what the mirror carries.
-
-### Lint rules turned off on purpose
-
-Each is commented in `oxlint.config.ts`:
-
-- `func-style` and `react/function-component-definition` — the codebase uses hoisted `function` declarations.
-- `max-classes-per-file` — the three model validation errors belong together in `projector.ts`.
-- `unicorn/prefer-structured-clone` — document snapshots are persisted to `localStorage`, so the JSON round trip is the intended clone: it drops non-serialisable values instead of throwing.
-
-### Warnings kept on purpose
-
-- `typescript/no-explicit-any` (1) — `type AnyEditor = any` in `src/notebook/blocknote-port.ts`. This is the adapter, the one place BlockNote's opaque editor generics are allowed to meet the port. The block components in `src/editor.tsx` type their props structurally (`ModelBlockFields`) and hand the editor to the port as `unknown`.
+- **One portable format.** Seeds, storage, exports, agent payloads, and `get_document` share one shape. Before this, the editor's own block shape was stored and read back through a converter that expected another dialect, so prose was lost on every reload.
+- **An editor port with two adapters.** Notebook logic talks to `EditorPort`, never to BlockNote. The in-memory adapter runs the same code in tests and for `dry_run`. Anything that cannot run against `createMemoryPort` does not belong in a tool.
+- **A tool table, not a hook per tool.** One row describes a tool once. `useWebMCP` must be called at a component's top level, so `ModeloTools` renders one small component per row.
+- **Lenient projection.** An invalid block becomes an issue on that block. A duplicate name marks the second block, not the whole document. A strict `projectDocument` remains for callers that need a clean model.
+- **The title is a block, not a field.** Every document opens with a level 1 heading, and that heading is the notebook title. The rejected alternative was a `title` field on the notebook record beside a heading in the document: two names for one thing, free to drift, and one of them invisible to the agent tools that write prose.
+- **Domain schemas live with their module.** The engine owns its rules; `src/webmcp/schemas.ts` only composes them. A tool schema that restates a rule will drift from it.
+- **shadcn on Base UI, not Radix.** One component library covers every control. The one stylesheet left is `src/blocknote-theme.css`, because BlockNote paints its own editor surface.
 
 ## Known gaps
 
-- The architecture refactor has not been reviewed in a real browser. The test suite and the production build pass, but the visual result needs a pass at `pnpm dev`.
-- The production bundle is a single 2.1 MB chunk. Code splitting is untouched.
-- `src/components/ui/` is vendored output and is excluded from linting; upgrading shadcn will overwrite any local edit.
+Date each entry. Delete it when it is fixed.
+
+- **2026-08-29** — the architecture refactor has not been seen in a browser. Tests and the build pass.
+- **2026-08-29** — the production bundle is one 2.1 MB chunk. Code splitting is untouched.

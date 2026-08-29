@@ -15,14 +15,15 @@ describe("Modelo app smoke", () => {
     expect(
       await screen.findAllByText("AE compensation & accelerator")
     ).not.toHaveLength(0);
-    expect(screen.getByText("Closed ARR")).toBeTruthy();
+    expect(screen.getByDisplayValue("closed_arr")).toBeTruthy();
     expect(localStorage.getItem(STORAGE_KEY)).toContain("sales-ae-comp-plan");
   });
 
-  it("opens a newly created empty notebook", async () => {
+  it("opens a new notebook on its own title heading", async () => {
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: "New notebook" }));
-    expect(await screen.findByDisplayValue("Untitled notebook")).toBeTruthy();
+    // The sidebar row and the document heading both read the same block.
+    expect(await screen.findAllByText("Untitled notebook")).toHaveLength(2);
   });
 
   it("renders human config fields and the boolean toggle", async () => {
@@ -38,7 +39,6 @@ describe("Modelo app smoke", () => {
                 currency: "EUR",
                 format: "currency",
                 id: "number",
-                label: "Price",
                 name: "price",
                 step: 1,
                 type: "number",
@@ -47,7 +47,6 @@ describe("Modelo app smoke", () => {
               },
               {
                 id: "slider",
-                label: "Growth",
                 max: 100,
                 min: 0,
                 name: "growth",
@@ -58,7 +57,6 @@ describe("Modelo app smoke", () => {
               },
               {
                 id: "select",
-                label: "Tier",
                 name: "tier",
                 options: [
                   { label: "Basic", value: 1 },
@@ -70,7 +68,6 @@ describe("Modelo app smoke", () => {
               },
               {
                 id: "boolean",
-                label: "Hire now",
                 name: "hired",
                 type: "boolean",
                 value: 1,
@@ -79,7 +76,6 @@ describe("Modelo app smoke", () => {
             ],
             id: "config",
             scenarios: [],
-            title: "Config",
             updatedAt: new Date().toISOString(),
           },
         ],
@@ -101,9 +97,7 @@ describe("Modelo app smoke", () => {
       "Basic"
     );
     expect(
-      screen
-        .getByRole("switch", { name: "Hire now" })
-        .getAttribute("aria-checked")
+      screen.getByRole("switch", { name: "hired" }).getAttribute("aria-checked")
     ).toBe("true");
   });
 
@@ -120,7 +114,6 @@ describe("Modelo app smoke", () => {
                 currency: "NOK",
                 format: "currency",
                 id: "currency",
-                label: "Currency",
                 name: "currency",
                 step: 1,
                 type: "number",
@@ -130,7 +123,6 @@ describe("Modelo app smoke", () => {
             ],
             id: "formats",
             scenarios: [],
-            title: "Formats",
             updatedAt: new Date().toISOString(),
           },
         ],
@@ -160,7 +152,6 @@ describe("Modelo app smoke", () => {
               {
                 format: "unit",
                 id: "unit",
-                label: "Distance",
                 name: "distance",
                 step: 1,
                 type: "number",
@@ -171,7 +162,6 @@ describe("Modelo app smoke", () => {
             ],
             id: "formats",
             scenarios: [],
-            title: "Formats",
             updatedAt: new Date().toISOString(),
           },
         ],
@@ -200,7 +190,6 @@ describe("Modelo app smoke", () => {
             blocks: [
               {
                 id: "price",
-                label: "Price",
                 name: "price",
                 step: 1,
                 type: "number",
@@ -210,7 +199,6 @@ describe("Modelo app smoke", () => {
             ],
             id: "bounds",
             scenarios: [],
-            title: "Bounds",
             updatedAt: new Date().toISOString(),
           },
         ],
@@ -220,7 +208,7 @@ describe("Modelo app smoke", () => {
     render(<App />);
 
     // A default of 0 here would silently clamp any value an agent sets.
-    const input = await screen.findByRole("spinbutton", { name: "Price" });
+    const input = await screen.findByRole("spinbutton", { name: "price" });
     expect(input.getAttribute("min")).toBeNull();
     expect(input.getAttribute("max")).toBeNull();
   });
@@ -237,7 +225,6 @@ describe("Modelo app smoke", () => {
               {
                 formula: "1 + 1",
                 id: "result",
-                label: "Result",
                 name: "result",
                 type: "formula",
                 varId: "result-id",
@@ -245,7 +232,6 @@ describe("Modelo app smoke", () => {
             ],
             id: "formula",
             scenarios: [],
-            title: "Formula",
             updatedAt: new Date().toISOString(),
           },
         ],
@@ -253,7 +239,7 @@ describe("Modelo app smoke", () => {
       })
     );
     render(<App />);
-    expect(await screen.findByLabelText("Result expression")).toBeTruthy();
+    expect(await screen.findByLabelText("result expression")).toBeTruthy();
     expect(screen.queryByLabelText("Format")).toBeNull();
     expect(screen.queryByLabelText("Currency code")).toBeNull();
     expect(screen.queryByLabelText("Unit")).toBeNull();
@@ -271,7 +257,6 @@ describe("Modelo app smoke", () => {
             blocks: [
               {
                 id: "price",
-                label: "Price",
                 name: "price",
                 step: 1,
                 type: "number",
@@ -283,7 +268,6 @@ describe("Modelo app smoke", () => {
             scenarios: [
               { id: "best", name: "Best case", values: { "price-id": 25 } },
             ],
-            title: "Scenarios",
             updatedAt: new Date().toISOString(),
           },
         ],
@@ -295,7 +279,7 @@ describe("Modelo app smoke", () => {
     expect(chip.getAttribute("aria-pressed")).toBe("false");
     fireEvent.click(chip);
     expect(
-      await screen.findByRole("spinbutton", { name: "Price" })
+      await screen.findByRole("spinbutton", { name: "price" })
     ).toHaveProperty("value", "25");
     expect(
       screen

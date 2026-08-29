@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 
+import { toEditorBlocks } from "../src/engine/portable";
+import { titleBlock } from "../src/engine/title";
 import type { ModeloDocument } from "../src/model";
 import { createMemoryPort } from "../src/notebook/port";
 import { toInputSchema } from "../src/webmcp/schemas";
 import { findTool, runTool, TOOLS } from "../src/webmcp/tools";
 import type { ToolRuntime } from "../src/webmcp/tools";
+import { notebookTitle } from "../src/workspace";
 import type { Workspace } from "../src/workspace";
 
 /**
@@ -19,7 +22,12 @@ function harness(
     currency: "EUR",
     locale: "en-US",
     notebooks: [
-      { blocks: [], id: "nb", scenarios, title: "Test", updatedAt: "" },
+      {
+        blocks: [titleBlock("Test")],
+        id: "nb",
+        scenarios,
+        updatedAt: "",
+      },
     ],
     version: 1,
   };
@@ -190,13 +198,55 @@ describe("writing sections", () => {
   });
 });
 
+describe("the title block", () => {
+  const titleHeading = toEditorBlocks([titleBlock("Runway")]) as ModeloDocument;
+  const reportedTitle = (result: Result) =>
+    (data(result).notebook as { title: string }).title;
+
+  it("reports the document heading as the notebook title", async () => {
+    const h = harness([...titleHeading, price]);
+    expect(reportedTitle(await h.call("get_document"))).toBe("Runway");
+  });
+
+  it("refuses to remove it", async () => {
+    const h = harness([...titleHeading, price]);
+    const result = await h.call("remove_blocks", {
+      ids: [h.port.document[0].id],
+    });
+    expect(failure(result).code).toBe("TITLE_BLOCK");
+    expect(h.port.document).toHaveLength(2);
+  });
+
+  it("refuses to demote it below level 1", async () => {
+    const h = harness([...titleHeading, price]);
+    const [title] = h.port.document;
+    const { id } = title;
+    expect(failure(await h.call("update_block", { id, level: 2 })).code).toBe(
+      "TITLE_BLOCK"
+    );
+    // Retitling it is an ordinary text update.
+    await h.call("update_block", { id, text: "Runway v2" });
+    expect(reportedTitle(await h.call("get_document"))).toBe("Runway v2");
+  });
+
+  it("refuses to insert anything above it", async () => {
+    const h = harness([...titleHeading, price]);
+    const result = await h.call("write_section", {
+      body: "Anything.",
+      heading: "Above",
+      placement: "before",
+      referenceBlockId: h.port.document[0].id,
+    });
+    expect(failure(result).code).toBe("TITLE_BLOCK");
+  });
+});
+
 describe("prose tools", () => {
-  it("inserts an inline reference at the requested offset with the requested label", async () => {
+  it("inserts an inline reference at the requested offset", async () => {
     const h = harness([price, paragraph]);
     const result = data(
       await h.call("insert_inline_ref", {
         blockId: "p",
-        label: "the price",
         offset: 7,
         variable: "price",
       })
@@ -204,7 +254,7 @@ describe("prose tools", () => {
     expect(result.varId).toBe("price-id");
     expect(content(h.port.getBlock("p"))).toEqual([
       { styles: {}, text: "Price: ", type: "text" },
-      { props: { label: "the price", varId: "price-id" }, type: "variableRef" },
+      { props: { name: "price", varId: "price-id" }, type: "variableRef" },
       { styles: {}, text: "today.", type: "text" },
     ]);
   });
@@ -213,7 +263,7 @@ describe("prose tools", () => {
     const h = harness([price, paragraph]);
     await h.call("replace_paragraph", { id: "p", text: "Now @price." });
     expect(content(h.port.getBlock("p"))[1]).toEqual({
-      props: { label: "price", varId: "price-id" },
+      props: { name: "price", varId: "price-id" },
       type: "variableRef",
     });
   });
@@ -366,7 +416,7 @@ describe("workspace tools", () => {
     expect(h.workspace.notebooks).toHaveLength(2);
 
     await h.call("rename_notebook", { id: created.id, name: "Plan B" });
-    expect(h.workspace.notebooks[1].title).toBe("Plan B");
+    expect(notebookTitle(h.workspace.notebooks[1])).toBe("Plan B");
 
     const copy = data(await h.call("duplicate_notebook", { id: "nb" }));
     expect(copy.title).toBe("Test copy");
