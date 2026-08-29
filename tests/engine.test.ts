@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ModeloDocument } from "../src/model";
+
 import {
   DuplicateVariableNameError,
   evaluateModel,
@@ -7,69 +7,141 @@ import {
   projectDocument,
   renameVariable,
 } from "../src/engine";
+import type { ModeloDocument } from "../src/model";
 
 const document: ModeloDocument = [
   {
     id: "input-block",
+    props: {
+      currency: "USD",
+      format: "currency",
+      name: "revenue",
+      value: 1200,
+      varId: "revenue-id",
+    },
     type: "modelVariable",
-    props: { varId: "revenue-id", name: "revenue", value: 1200, format: "currency", currency: "USD" },
   },
   {
     id: "cost-block",
+    props: {
+      currency: "USD",
+      format: "currency",
+      name: "cost",
+      value: 450,
+      varId: "cost-id",
+    },
     type: "modelVariable",
-    props: { varId: "cost-id", name: "cost", value: 450, format: "currency", currency: "USD" },
   },
   {
     id: "profit-block",
+    props: { formula: "revenue - cost", name: "profit", varId: "profit-id" },
     type: "modelFormula",
-    props: { varId: "profit-id", name: "profit", formula: "revenue - cost" },
   },
 ];
 
 describe("Modelo deterministic engine", () => {
   it("registers projected variables and evaluates formulas", () => {
     const projected = projectDocument(document);
-    expect(projected.variables.map(({ varId, name, kind }) => ({ varId, name, kind }))).toEqual([
-      { varId: "revenue-id", name: "revenue", kind: "input" },
-      { varId: "cost-id", name: "cost", kind: "input" },
-      { varId: "profit-id", name: "profit", kind: "formula" },
+    expect(
+      projected.variables.map(({ varId, name, kind }) => ({
+        kind,
+        name,
+        varId,
+      }))
+    ).toEqual([
+      { kind: "input", name: "revenue", varId: "revenue-id" },
+      { kind: "input", name: "cost", varId: "cost-id" },
+      { kind: "formula", name: "profit", varId: "profit-id" },
     ]);
 
     const result = evaluateModel(projected);
-    expect(result.byId["profit-id"]).toMatchObject({ status: "ok", value: 750 });
+    expect(result.byId["profit-id"]).toMatchObject({
+      status: "ok",
+      value: 750,
+    });
     expect(result.byId["profit-id"].formatted).toBe("750 US$");
   });
 
   it("evaluates forward formula references deterministically", () => {
     const projected = projectDocument([
-      { id: "a", type: "modelFormula", props: { varId: "a-id", name: "a", formula: "b * 2" } },
-      { id: "b", type: "modelVariable", props: { varId: "b-id", name: "b", value: 3 } },
+      {
+        id: "a",
+        props: { formula: "b * 2", name: "a", varId: "a-id" },
+        type: "modelFormula",
+      },
+      {
+        id: "b",
+        props: { name: "b", value: 3, varId: "b-id" },
+        type: "modelVariable",
+      },
     ]);
-    expect(evaluateModel(projected).byId["a-id"]).toMatchObject({ status: "ok", value: 6 });
+    expect(evaluateModel(projected).byId["a-id"]).toMatchObject({
+      status: "ok",
+      value: 6,
+    });
   });
 
   it("formats currencies and units", () => {
-    expect(formatValue(1234.5, { style: "currency", currency: "USD" }, { locale: "en-US" })).toBe("$1,234.50");
-    expect(formatValue(12.5, { style: "unit", unit: "kg" }, { locale: "en-US" })).toBe("12.5 kg");
-    expect(formatValue(19.298, { format: "currency", decimals: 0 }, { currency: "EUR", locale: "es-ES" })).toBe("19 €");
-    expect(formatValue(19.298, { format: "currency", decimals: 2 }, { currency: "EUR", locale: "es-ES" })).toBe("19,30 €");
+    expect(
+      formatValue(
+        1234.5,
+        { currency: "USD", style: "currency" },
+        { locale: "en-US" }
+      )
+    ).toBe("$1,234.50");
+    expect(
+      formatValue(12.5, { style: "unit", unit: "kg" }, { locale: "en-US" })
+    ).toBe("12.5 kg");
+    expect(
+      formatValue(
+        19.298,
+        { decimals: 0, format: "currency" },
+        { currency: "EUR", locale: "es-ES" }
+      )
+    ).toBe("19 €");
+    expect(
+      formatValue(
+        19.298,
+        { decimals: 2, format: "currency" },
+        { currency: "EUR", locale: "es-ES" }
+      )
+    ).toBe("19,30 €");
   });
 
   it("renames by stable varId and safely rewrites formula identifiers", () => {
     const renamed = renameVariable(
       [
         ...document,
-        { id: "other", type: "modelFormula", props: { varId: "other-id", name: "other", formula: "revenue_growth + revenue" } },
-        { id: "growth", type: "modelVariable", props: { varId: "growth-id", name: "revenue_growth", value: 2 } },
+        {
+          id: "other",
+          props: {
+            formula: "revenue_growth + revenue",
+            name: "other",
+            varId: "other-id",
+          },
+          type: "modelFormula",
+        },
+        {
+          id: "growth",
+          props: { name: "revenue_growth", value: 2, varId: "growth-id" },
+          type: "modelVariable",
+        },
       ],
       "revenue-id",
-      "sales",
+      "sales"
     );
     const projected = projectDocument(renamed);
     expect(projected.byId["revenue-id"].name).toBe("sales");
-    expect(projected.byId["profit-id"]).toMatchObject({ formula: "sales - cost" });
-    expect(projected.byId["other-id"]).toMatchObject({ formula: "revenue_growth + sales" });
-    expect(evaluateModel(projected).byId["profit-id"]).toMatchObject({ status: "ok", value: 750 });
+    expect(projected.byId["profit-id"]).toMatchObject({
+      formula: "sales - cost",
+    });
+    expect(projected.byId["other-id"]).toMatchObject({
+      formula: "revenue_growth + sales",
+    });
+    expect(evaluateModel(projected).byId["profit-id"]).toMatchObject({
+      status: "ok",
+      value: 750,
+    });
   });
 
   it("shows a missing reference after a variable is deleted rather than substituting zero", () => {
@@ -82,75 +154,373 @@ describe("Modelo deterministic engine", () => {
   });
 
   it("evaluates explicit MathJS unit conversions", () => {
-    const legal = evaluateModel(projectDocument([
-      { id: "distance", type: "modelFormula", props: { varId: "distance-id", name: "distance", formula: "5 cm to mm" } },
-    ])).byId["distance-id"];
-    expect(legal).toMatchObject({ status: "ok", value: 50, formatted: "50 mm" });
+    const legal = evaluateModel(
+      projectDocument([
+        {
+          id: "distance",
+          props: {
+            formula: "5 cm to mm",
+            name: "distance",
+            varId: "distance-id",
+          },
+          type: "modelFormula",
+        },
+      ])
+    ).byId["distance-id"];
+    expect(legal).toMatchObject({
+      formatted: "50 mm",
+      status: "ok",
+      value: 50,
+    });
 
-    const hectares = evaluateModel(projectDocument([
-      { id: "area", type: "number", props: { varId: "area-id", name: "area", value: 2, format: "unit", unit: "ha" } },
-      { id: "converted", type: "formula", props: { varId: "converted-id", name: "converted", formula: "area to m2" } },
-    ])).byId["converted-id"];
-    expect(hectares).toMatchObject({ status: "ok", value: 20_000, formatted: "20.000 m2" });
+    const hectares = evaluateModel(
+      projectDocument([
+        {
+          id: "area",
+          props: {
+            format: "unit",
+            name: "area",
+            unit: "ha",
+            value: 2,
+            varId: "area-id",
+          },
+          type: "number",
+        },
+        {
+          id: "converted",
+          props: {
+            formula: "area to m2",
+            name: "converted",
+            varId: "converted-id",
+          },
+          type: "formula",
+        },
+      ])
+    ).byId["converted-id"];
+    expect(hectares).toMatchObject({
+      formatted: "20.000 m2",
+      status: "ok",
+      value: 20_000,
+    });
   });
 
   it("infers compatible currency and physical units from inputs", () => {
-    const result = evaluateModel(projectDocument([
-      { id: "eur-a", type: "number", props: { varId: "eur-a-id", name: "eur_a", value: 70_000, format: "currency", currency: "EUR" } },
-      { id: "eur-b", type: "number", props: { varId: "eur-b-id", name: "eur_b", value: 5_000, format: "currency", currency: "EUR" } },
-      { id: "km", type: "number", props: { varId: "km-id", name: "kilometres", value: 5, format: "unit", unit: "km" } },
-      { id: "m", type: "number", props: { varId: "m-id", name: "metres", value: 500, format: "unit", unit: "m" } },
-      { id: "money", type: "formula", props: { varId: "money-id", name: "money", formula: "eur_a + eur_b" } },
-      { id: "distance", type: "formula", props: { varId: "distance-id", name: "distance", formula: "kilometres + metres" } },
-    ]), { locale: "en-US" });
-    expect(result.byId["money-id"]).toMatchObject({ status: "ok", value: 75_000, formatted: "€75,000" });
-    expect(result.byId["distance-id"]).toMatchObject({ status: "ok", value: 5.5, formatted: "5.5 km" });
+    const result = evaluateModel(
+      projectDocument([
+        {
+          id: "eur-a",
+          props: {
+            currency: "EUR",
+            format: "currency",
+            name: "eur_a",
+            value: 70_000,
+            varId: "eur-a-id",
+          },
+          type: "number",
+        },
+        {
+          id: "eur-b",
+          props: {
+            currency: "EUR",
+            format: "currency",
+            name: "eur_b",
+            value: 5000,
+            varId: "eur-b-id",
+          },
+          type: "number",
+        },
+        {
+          id: "km",
+          props: {
+            format: "unit",
+            name: "kilometres",
+            unit: "km",
+            value: 5,
+            varId: "km-id",
+          },
+          type: "number",
+        },
+        {
+          id: "m",
+          props: {
+            format: "unit",
+            name: "metres",
+            unit: "m",
+            value: 500,
+            varId: "m-id",
+          },
+          type: "number",
+        },
+        {
+          id: "money",
+          props: { formula: "eur_a + eur_b", name: "money", varId: "money-id" },
+          type: "formula",
+        },
+        {
+          id: "distance",
+          props: {
+            formula: "kilometres + metres",
+            name: "distance",
+            varId: "distance-id",
+          },
+          type: "formula",
+        },
+      ]),
+      { locale: "en-US" }
+    );
+    expect(result.byId["money-id"]).toMatchObject({
+      formatted: "€75,000",
+      status: "ok",
+      value: 75_000,
+    });
+    expect(result.byId["distance-id"]).toMatchObject({
+      formatted: "5.5 km",
+      status: "ok",
+      value: 5.5,
+    });
   });
 
   it("cancels matching units in division and preserves scalar currency operations", () => {
-    const result = evaluateModel(projectDocument([
-      { id: "revenue", type: "number", props: { varId: "revenue-id", name: "revenue", value: 100, format: "currency", currency: "EUR" } },
-      { id: "cost", type: "number", props: { varId: "cost-id", name: "cost", value: 55, format: "currency", currency: "EUR" } },
-      { id: "distance-a", type: "number", props: { varId: "distance-a-id", name: "distance_a", value: 5, format: "unit", unit: "km" } },
-      { id: "distance-b", type: "number", props: { varId: "distance-b-id", name: "distance_b", value: 2, format: "unit", unit: "km" } },
-      { id: "margin", type: "formula", props: { varId: "margin-id", name: "margin", formula: "revenue / cost" } },
-      { id: "pace", type: "formula", props: { varId: "pace-id", name: "pace", formula: "distance_a / distance_b" } },
-      { id: "half", type: "formula", props: { varId: "half-id", name: "half", formula: "revenue / 2" } },
-      { id: "double", type: "formula", props: { varId: "double-id", name: "double", formula: "revenue * 2" } },
-    ]), { locale: "en-US" });
+    const result = evaluateModel(
+      projectDocument([
+        {
+          id: "revenue",
+          props: {
+            currency: "EUR",
+            format: "currency",
+            name: "revenue",
+            value: 100,
+            varId: "revenue-id",
+          },
+          type: "number",
+        },
+        {
+          id: "cost",
+          props: {
+            currency: "EUR",
+            format: "currency",
+            name: "cost",
+            value: 55,
+            varId: "cost-id",
+          },
+          type: "number",
+        },
+        {
+          id: "distance-a",
+          props: {
+            format: "unit",
+            name: "distance_a",
+            unit: "km",
+            value: 5,
+            varId: "distance-a-id",
+          },
+          type: "number",
+        },
+        {
+          id: "distance-b",
+          props: {
+            format: "unit",
+            name: "distance_b",
+            unit: "km",
+            value: 2,
+            varId: "distance-b-id",
+          },
+          type: "number",
+        },
+        {
+          id: "margin",
+          props: {
+            formula: "revenue / cost",
+            name: "margin",
+            varId: "margin-id",
+          },
+          type: "formula",
+        },
+        {
+          id: "pace",
+          props: {
+            formula: "distance_a / distance_b",
+            name: "pace",
+            varId: "pace-id",
+          },
+          type: "formula",
+        },
+        {
+          id: "half",
+          props: { formula: "revenue / 2", name: "half", varId: "half-id" },
+          type: "formula",
+        },
+        {
+          id: "double",
+          props: { formula: "revenue * 2", name: "double", varId: "double-id" },
+          type: "formula",
+        },
+      ]),
+      { locale: "en-US" }
+    );
 
-    expect(result.byId["margin-id"]).toMatchObject({ status: "ok", value: 100 / 55, formatted: "1.82" });
-    expect(result.byId["pace-id"]).toMatchObject({ status: "ok", value: 2.5, formatted: "2.5" });
-    expect(result.byId["half-id"]).toMatchObject({ status: "ok", value: 50, formatted: "€50" });
-    expect(result.byId["double-id"]).toMatchObject({ status: "ok", value: 200, formatted: "€200" });
+    expect(result.byId["margin-id"]).toMatchObject({
+      formatted: "1.82",
+      status: "ok",
+      value: 100 / 55,
+    });
+    expect(result.byId["pace-id"]).toMatchObject({
+      formatted: "2.5",
+      status: "ok",
+      value: 2.5,
+    });
+    expect(result.byId["half-id"]).toMatchObject({
+      formatted: "€50",
+      status: "ok",
+      value: 50,
+    });
+    expect(result.byId["double-id"]).toMatchObject({
+      formatted: "€200",
+      status: "ok",
+      value: 200,
+    });
   });
 
   it("rejects squared and cross-currency money while preserving money per time", () => {
-    const result = evaluateModel(projectDocument([
-      { id: "eur", type: "number", props: { varId: "eur-id", name: "eur", value: 100, format: "currency", currency: "EUR" } },
-      { id: "usd", type: "number", props: { varId: "usd-id", name: "usd", value: 50, format: "currency", currency: "USD" } },
-      { id: "months", type: "number", props: { varId: "months-id", name: "months", value: 2, format: "unit", unit: "month" } },
-      { id: "squared", type: "formula", props: { varId: "squared-id", name: "squared", formula: "eur * eur" } },
-      { id: "cross", type: "formula", props: { varId: "cross-id", name: "cross", formula: "eur / usd" } },
-      { id: "monthly", type: "formula", props: { varId: "monthly-id", name: "monthly", formula: "eur / months" } },
-    ]), { locale: "en-US" });
+    const result = evaluateModel(
+      projectDocument([
+        {
+          id: "eur",
+          props: {
+            currency: "EUR",
+            format: "currency",
+            name: "eur",
+            value: 100,
+            varId: "eur-id",
+          },
+          type: "number",
+        },
+        {
+          id: "usd",
+          props: {
+            currency: "USD",
+            format: "currency",
+            name: "usd",
+            value: 50,
+            varId: "usd-id",
+          },
+          type: "number",
+        },
+        {
+          id: "months",
+          props: {
+            format: "unit",
+            name: "months",
+            unit: "month",
+            value: 2,
+            varId: "months-id",
+          },
+          type: "number",
+        },
+        {
+          id: "squared",
+          props: { formula: "eur * eur", name: "squared", varId: "squared-id" },
+          type: "formula",
+        },
+        {
+          id: "cross",
+          props: { formula: "eur / usd", name: "cross", varId: "cross-id" },
+          type: "formula",
+        },
+        {
+          id: "monthly",
+          props: {
+            formula: "eur / months",
+            name: "monthly",
+            varId: "monthly-id",
+          },
+          type: "formula",
+        },
+      ]),
+      { locale: "en-US" }
+    );
 
     expect(result.byId["squared-id"]).toMatchObject({ status: "error" });
     expect(result.byId["cross-id"]).toMatchObject({ status: "error" });
-    expect(result.byId["monthly-id"]).toMatchObject({ status: "ok", value: 50 });
+    expect(result.byId["monthly-id"]).toMatchObject({
+      status: "ok",
+      value: 50,
+    });
     expect(result.byId["monthly-id"].formatted).toContain("EUR / month");
   });
 
   it("shows errors for incompatible currencies and physical units", () => {
-    const result = evaluateModel(projectDocument([
-      { id: "eur", type: "number", props: { varId: "eur-id", name: "eur", value: 70_000, format: "currency", currency: "EUR" } },
-      { id: "usd", type: "number", props: { varId: "usd-id", name: "usd", value: 70_000, format: "currency", currency: "USD" } },
-      { id: "km", type: "number", props: { varId: "km-id", name: "km", value: 5, format: "unit", unit: "km" } },
-      { id: "kg", type: "number", props: { varId: "kg-id", name: "kg", value: 2, format: "unit", unit: "kg" } },
-      { id: "currency", type: "formula", props: { varId: "currency-id", name: "currency_total", formula: "eur + usd" } },
-      { id: "physical", type: "formula", props: { varId: "physical-id", name: "physical_total", formula: "km + kg" } },
-      { id: "fx", type: "formula", props: { varId: "fx-id", name: "fx", formula: "usd to EUR" } },
-    ]));
+    const result = evaluateModel(
+      projectDocument([
+        {
+          id: "eur",
+          props: {
+            currency: "EUR",
+            format: "currency",
+            name: "eur",
+            value: 70_000,
+            varId: "eur-id",
+          },
+          type: "number",
+        },
+        {
+          id: "usd",
+          props: {
+            currency: "USD",
+            format: "currency",
+            name: "usd",
+            value: 70_000,
+            varId: "usd-id",
+          },
+          type: "number",
+        },
+        {
+          id: "km",
+          props: {
+            format: "unit",
+            name: "km",
+            unit: "km",
+            value: 5,
+            varId: "km-id",
+          },
+          type: "number",
+        },
+        {
+          id: "kg",
+          props: {
+            format: "unit",
+            name: "kg",
+            unit: "kg",
+            value: 2,
+            varId: "kg-id",
+          },
+          type: "number",
+        },
+        {
+          id: "currency",
+          props: {
+            formula: "eur + usd",
+            name: "currency_total",
+            varId: "currency-id",
+          },
+          type: "formula",
+        },
+        {
+          id: "physical",
+          props: {
+            formula: "km + kg",
+            name: "physical_total",
+            varId: "physical-id",
+          },
+          type: "formula",
+        },
+        {
+          id: "fx",
+          props: { formula: "usd to EUR", name: "fx", varId: "fx-id" },
+          type: "formula",
+        },
+      ])
+    );
     expect(result.byId["currency-id"]).toMatchObject({ status: "error" });
     expect(result.byId["currency-id"].formatted).toContain("Error");
     expect(result.byId["physical-id"]).toMatchObject({ status: "error" });
@@ -158,58 +528,182 @@ describe("Modelo deterministic engine", () => {
   });
 
   it("keeps percentages dimensionless while preserving percent and currency displays", () => {
-    const result = evaluateModel(projectDocument([
-      { id: "quota", type: "number", props: { varId: "quota-id", name: "quota", value: 70_000, format: "currency", currency: "EUR" } },
-      { id: "rate", type: "number", props: { varId: "rate-id", name: "rate", value: 8, format: "percent" } },
-      { id: "extra", type: "number", props: { varId: "extra-id", name: "extra", value: 2, format: "percent" } },
-      { id: "commission", type: "formula", props: { varId: "commission-id", name: "commission", formula: "quota * rate" } },
-      { id: "combined", type: "formula", props: { varId: "combined-id", name: "combined", formula: "rate + extra" } },
-      { id: "uplift", type: "formula", props: { varId: "uplift-id", name: "uplift", formula: "1 + rate" } },
-    ]), { locale: "en-US" });
-    expect(result.byId["rate-id"]).toMatchObject({ status: "ok", value: 8, formatted: "8%" });
-    expect(result.byId["commission-id"]).toMatchObject({ status: "ok", value: 5_600, formatted: "€5,600" });
-    expect(result.byId["combined-id"]).toMatchObject({ status: "ok", value: 0.1, formatted: "0.1" });
-    expect(result.byId["uplift-id"]).toMatchObject({ status: "ok", value: 1.08, formatted: "1.08" });
+    const result = evaluateModel(
+      projectDocument([
+        {
+          id: "quota",
+          props: {
+            currency: "EUR",
+            format: "currency",
+            name: "quota",
+            value: 70_000,
+            varId: "quota-id",
+          },
+          type: "number",
+        },
+        {
+          id: "rate",
+          props: {
+            format: "percent",
+            name: "rate",
+            value: 8,
+            varId: "rate-id",
+          },
+          type: "number",
+        },
+        {
+          id: "extra",
+          props: {
+            format: "percent",
+            name: "extra",
+            value: 2,
+            varId: "extra-id",
+          },
+          type: "number",
+        },
+        {
+          id: "commission",
+          props: {
+            formula: "quota * rate",
+            name: "commission",
+            varId: "commission-id",
+          },
+          type: "formula",
+        },
+        {
+          id: "combined",
+          props: {
+            formula: "rate + extra",
+            name: "combined",
+            varId: "combined-id",
+          },
+          type: "formula",
+        },
+        {
+          id: "uplift",
+          props: { formula: "1 + rate", name: "uplift", varId: "uplift-id" },
+          type: "formula",
+        },
+      ]),
+      { locale: "en-US" }
+    );
+    expect(result.byId["rate-id"]).toMatchObject({
+      formatted: "8%",
+      status: "ok",
+      value: 8,
+    });
+    expect(result.byId["commission-id"]).toMatchObject({
+      formatted: "€5,600",
+      status: "ok",
+      value: 5600,
+    });
+    expect(result.byId["combined-id"]).toMatchObject({
+      formatted: "0.1",
+      status: "ok",
+      value: 0.1,
+    });
+    expect(result.byId["uplift-id"]).toMatchObject({
+      formatted: "1.08",
+      status: "ok",
+      value: 1.08,
+    });
   });
 
   it("keeps parse/runtime errors visible", () => {
-    const result = evaluateModel(projectDocument([
-      { id: "bad", type: "modelFormula", props: { varId: "bad-id", name: "bad", formula: "2 / 0" } },
-    ])).byId["bad-id"];
+    const result = evaluateModel(
+      projectDocument([
+        {
+          id: "bad",
+          props: { formula: "2 / 0", name: "bad", varId: "bad-id" },
+          type: "modelFormula",
+        },
+      ])
+    ).byId["bad-id"];
     expect(result.status).toBe("error");
     expect(result.formatted).toContain("Error");
   });
 
   it("rejects duplicate names when projecting or renaming", () => {
-    expect(() => projectDocument([
-      { id: "one", type: "modelVariable", props: { varId: "one-id", name: "same", value: 1 } },
-      { id: "two", type: "modelVariable", props: { varId: "two-id", name: "same", value: 2 } },
-    ])).toThrow(DuplicateVariableNameError);
-    expect(() => renameVariable(document, "cost-id", "revenue")).toThrow(DuplicateVariableNameError);
+    expect(() =>
+      projectDocument([
+        {
+          id: "one",
+          props: { name: "same", value: 1, varId: "one-id" },
+          type: "modelVariable",
+        },
+        {
+          id: "two",
+          props: { name: "same", value: 2, varId: "two-id" },
+          type: "modelVariable",
+        },
+      ])
+    ).toThrow(DuplicateVariableNameError);
+    expect(() => renameVariable(document, "cost-id", "revenue")).toThrow(
+      DuplicateVariableNameError
+    );
   });
 
   it("rejects decimals outside the 0-8 integer range", () => {
-    expect(() => projectDocument([
-      { id: "bad", type: "number", props: { varId: "bad-id", name: "bad", value: 1, decimals: 9 } },
-    ])).toThrow(/decimals/);
+    expect(() =>
+      projectDocument([
+        {
+          id: "bad",
+          props: { decimals: 9, name: "bad", value: 1, varId: "bad-id" },
+          type: "number",
+        },
+      ])
+    ).toThrow(/decimals/);
   });
 
   it("projects boolean toggles as numeric inputs and formats Yes/No", () => {
-    const off = evaluateModel(projectDocument([
-      { id: "toggle", type: "boolean", props: { varId: "toggle-id", name: "hired", value: 0 } },
-    ])).byId["toggle-id"];
-    const on = evaluateModel(projectDocument([
-      { id: "toggle", type: "boolean", props: { varId: "toggle-id", name: "hired", value: 2 } },
-      { id: "cost", type: "formula", props: { varId: "cost-id", name: "cost", formula: "hired * 5000" } },
-    ]));
-    expect(off).toMatchObject({ kind: "input", inputType: "boolean", value: 0, formatted: "No" });
-    expect(on.byId["toggle-id"]).toMatchObject({ value: 1, formatted: "Yes" });
+    const off = evaluateModel(
+      projectDocument([
+        {
+          id: "toggle",
+          props: { name: "hired", value: 0, varId: "toggle-id" },
+          type: "boolean",
+        },
+      ])
+    ).byId["toggle-id"];
+    const on = evaluateModel(
+      projectDocument([
+        {
+          id: "toggle",
+          props: { name: "hired", value: 2, varId: "toggle-id" },
+          type: "boolean",
+        },
+        {
+          id: "cost",
+          props: { formula: "hired * 5000", name: "cost", varId: "cost-id" },
+          type: "formula",
+        },
+      ])
+    );
+    expect(off).toMatchObject({
+      formatted: "No",
+      inputType: "boolean",
+      kind: "input",
+      value: 0,
+    });
+    expect(on.byId["toggle-id"]).toMatchObject({ formatted: "Yes", value: 1 });
     expect(on.byId["cost-id"]).toMatchObject({ status: "ok", value: 5000 });
   });
 
   it("projects optional numeric input bounds", () => {
-    expect(projectDocument([
-      { id: "bounded", type: "number", props: { varId: "bounded-id", name: "bounded", value: 5, min: 1, max: 10 } },
-    ]).byId["bounded-id"]).toMatchObject({ min: 1, max: 10 });
+    expect(
+      projectDocument([
+        {
+          id: "bounded",
+          props: {
+            max: 10,
+            min: 1,
+            name: "bounded",
+            value: 5,
+            varId: "bounded-id",
+          },
+          type: "number",
+        },
+      ]).byId["bounded-id"]
+    ).toMatchObject({ max: 10, min: 1 });
   });
 });

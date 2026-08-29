@@ -1,4 +1,16 @@
 {
+  "name": "modelo",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "test": "vitest run",
+    "preview": "vite preview",
+    "check": "ultracite check",
+    "fix": "ultracite fix"
+  },
   "dependencies": {
     "@blocknote/core": "0.54.0",
     "@blocknote/mantine": "0.54.0",
@@ -20,17 +32,5 @@
     "ultracite": "7.10.6",
     "vite": "7.1.7",
     "vitest": "3.2.4"
-  },
-  "name": "modelo",
-  "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "test": "vitest run",
-    "preview": "vite preview",
-    "check": "ultracite check",
-    "fix": "ultracite fix"
-  },
-  "type": "module",
-  "version": "1.0.0",
-  "private": true
+  }
 }

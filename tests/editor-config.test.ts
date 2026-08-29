@@ -1,9 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { clampSliderValue, modeloSchema, parseSelectOptions } from "../src/editor";
+
+import {
+  clampSliderValue,
+  modeloSchema,
+  parseSelectOptions,
+} from "../src/editor";
 
 describe("model block config helpers", () => {
   it("parses only finite numeric select options", () => {
-    expect(parseSelectOptions('[{"label":"Low","value":1},{"label":"bad","value":"2"}]')).toEqual([{ label: "Low", value: 1 }]);
+    expect(
+      parseSelectOptions(
+        '[{"label":"Low","value":1},{"label":"bad","value":"2"}]'
+      )
+    ).toEqual([{ label: "Low", value: 1 }]);
     expect(parseSelectOptions("not json")).toEqual([]);
   });
 
@@ -15,8 +24,8 @@ describe("model block config helpers", () => {
 
   it("keeps number bounds optional in the editor schema", () => {
     expect(modeloSchema.blockSchema.number.propSchema).toMatchObject({
-      min: { default: undefined, type: "number" },
       max: { default: undefined, type: "number" },
+      min: { default: undefined, type: "number" },
     });
   });
 });

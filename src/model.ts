@@ -1,9 +1,26 @@
 export type VariableId = string;
 
 export type NumberFormat =
-  | { style?: "number"; locale?: string; minimumFractionDigits?: number; maximumFractionDigits?: number }
-  | { style: "currency"; currency: string; locale?: string; minimumFractionDigits?: number; maximumFractionDigits?: number }
-  | { style: "unit"; unit: string; locale?: string; minimumFractionDigits?: number; maximumFractionDigits?: number };
+  | {
+      style?: "number";
+      locale?: string;
+      minimumFractionDigits?: number;
+      maximumFractionDigits?: number;
+    }
+  | {
+      style: "currency";
+      currency: string;
+      locale?: string;
+      minimumFractionDigits?: number;
+      maximumFractionDigits?: number;
+    }
+  | {
+      style: "unit";
+      unit: string;
+      locale?: string;
+      minimumFractionDigits?: number;
+      maximumFractionDigits?: number;
+    };
 
 export type FormatKind = "number" | "currency" | "unit" | "percent";
 

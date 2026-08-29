@@ -1,6 +1,7 @@
-import { useWebMCP, type WebMCPState } from "use-webmcp-tool";
-import { CURRENCIES, UNITS } from "../engine/units";
+import { useWebMCP } from "use-webmcp-tool";
+import type { WebMCPState } from "use-webmcp-tool";
 
+import { CURRENCIES, UNITS } from "../engine/units";
 import type {
   ModeloToolFailure,
   ModeloToolsAdapter,
@@ -26,288 +27,468 @@ import type {
 } from "./types";
 
 const emptySchema = {
-  type: "object",
-  properties: {},
   additionalProperties: false,
+  properties: {},
+  type: "object",
 } as const;
 
 const getModelSchema = {
-  type: "object",
-  properties: { includeDependencies: { type: "boolean", description: "Include formula and paragraph block ids that use each variable." } },
   additionalProperties: false,
+  properties: {
+    includeDependencies: {
+      description:
+        "Include formula and paragraph block ids that use each variable.",
+      type: "boolean",
+    },
+  },
+  type: "object",
 } as const;
 
 const idSchema = {
-  type: "object",
+  additionalProperties: false,
   properties: {
-    id: { type: "string", minLength: 1, description: "Workspace notebook id." },
+    id: { description: "Workspace notebook id.", minLength: 1, type: "string" },
   },
   required: ["id"],
-  additionalProperties: false,
+  type: "object",
 } as const;
 
 const createSchema = {
-  type: "object",
+  additionalProperties: false,
   properties: {
-    name: { type: "string", minLength: 1, description: "Name for the new notebook." },
+    name: {
+      description: "Name for the new notebook.",
+      minLength: 1,
+      type: "string",
+    },
   },
   required: ["name"],
-  additionalProperties: false,
+  type: "object",
 } as const;
 
 const duplicateSchema = {
-  type: "object",
+  additionalProperties: false,
   properties: {
-    id: { type: "string", minLength: 1, description: "Notebook id to duplicate." },
-    name: { type: "string", minLength: 1, description: "Optional name for the copy." },
+    id: {
+      description: "Notebook id to duplicate.",
+      minLength: 1,
+      type: "string",
+    },
+    name: {
+      description: "Optional name for the copy.",
+      minLength: 1,
+      type: "string",
+    },
   },
   required: ["id"],
-  additionalProperties: false,
+  type: "object",
 } as const;
 
 const renameSchema = {
-  type: "object",
+  additionalProperties: false,
   properties: {
-    id: { type: "string", minLength: 1, description: "Notebook id to rename." },
-    name: { type: "string", minLength: 1, description: "New notebook name." },
+    id: { description: "Notebook id to rename.", minLength: 1, type: "string" },
+    name: { description: "New notebook name.", minLength: 1, type: "string" },
   },
   required: ["id", "name"],
-  additionalProperties: false,
+  type: "object",
 } as const;
 
-const nameProperty = { type: "string", pattern: "^[A-Za-z_][A-Za-z0-9_]*$" } as const;
-const decimalsProperty = { type: "integer", minimum: 0, maximum: 8 } as const;
+const nameProperty = {
+  pattern: "^[A-Za-z_][A-Za-z0-9_]*$",
+  type: "string",
+} as const;
+const decimalsProperty = { maximum: 8, minimum: 0, type: "integer" } as const;
 const optionProperty = {
+  items: {
+    additionalProperties: false,
+    properties: { label: { type: "string" }, value: { type: "number" } },
+    required: ["label", "value"],
+    type: "object",
+  },
   type: "array",
-  items: { type: "object", properties: { label: { type: "string" }, value: { type: "number" } }, required: ["label", "value"], additionalProperties: false },
 } as const;
 const displayProperties = {
-  label: { type: "string", minLength: 1 }, format: { type: "string", enum: ["number", "currency", "percent", "unit"] }, unit: { type: "string", enum: UNITS }, currency: { type: "string", enum: CURRENCIES }, decimals: decimalsProperty,
+  currency: { enum: CURRENCIES, type: "string" },
+  decimals: decimalsProperty,
+  format: { enum: ["number", "currency", "percent", "unit"], type: "string" },
+  label: { minLength: 1, type: "string" },
+  unit: { enum: UNITS, type: "string" },
 } as const;
 const inputProperties = {
-  name: nameProperty, value: { type: "number" }, ...displayProperties,
-  min: { type: "number" }, max: { type: "number" }, step: { type: "number" }, options: optionProperty,
+  name: nameProperty,
+  value: { type: "number" },
+  ...displayProperties,
+  min: { type: "number" },
+  max: { type: "number" },
+  step: { type: "number" },
+  options: optionProperty,
 } as const;
 
 const insertBlocksSchema = {
-  type: "object",
+  additionalProperties: false,
   properties: {
     blocks: {
-      type: "array",
+      items: {
+        anyOf: [
+          {
+            additionalProperties: false,
+            properties: {
+              id: { type: "string" },
+              level: { default: 2, enum: [1, 2, 3], type: "integer" },
+              text: { type: "string" },
+              type: { const: "heading" },
+            },
+            required: ["type", "text"],
+            type: "object",
+          },
+          {
+            additionalProperties: false,
+            properties: {
+              id: { type: "string" },
+              text: { type: "string" },
+              type: { const: "paragraph" },
+            },
+            required: ["type", "text"],
+            type: "object",
+          },
+          {
+            additionalProperties: false,
+            properties: {
+              id: { type: "string" },
+              text: { type: "string" },
+              type: { const: "bullet" },
+            },
+            required: ["type", "text"],
+            type: "object",
+          },
+          ...(["number", "slider", "select", "boolean"] as const).map(
+            (type) => ({
+              additionalProperties: false,
+              properties: {
+                id: { type: "string" as const },
+                type: { const: type },
+                ...inputProperties,
+              },
+              required: ["type", "name", "value"] as const,
+              type: "object" as const,
+            })
+          ),
+          {
+            additionalProperties: false,
+            properties: {
+              formula: { minLength: 1, pattern: "\\S", type: "string" },
+              id: { type: "string" },
+              label: { minLength: 1, type: "string" },
+              name: nameProperty,
+              type: { const: "formula" },
+            },
+            required: ["type", "name", "formula"],
+            type: "object",
+          },
+        ],
+      },
       minItems: 1,
-      items: { anyOf: [
-        { type: "object", properties: { id: { type: "string" }, type: { const: "heading" }, text: { type: "string" }, level: { type: "integer", enum: [1, 2, 3], default: 2 } }, required: ["type", "text"], additionalProperties: false },
-        { type: "object", properties: { id: { type: "string" }, type: { const: "paragraph" }, text: { type: "string" } }, required: ["type", "text"], additionalProperties: false },
-        { type: "object", properties: { id: { type: "string" }, type: { const: "bullet" }, text: { type: "string" } }, required: ["type", "text"], additionalProperties: false },
-        ...(["number", "slider", "select", "boolean"] as const).map((type) => ({ type: "object" as const, properties: { id: { type: "string" as const }, type: { const: type }, ...inputProperties }, required: ["type", "name", "value"] as const, additionalProperties: false })),
-        { type: "object", properties: { id: { type: "string" }, type: { const: "formula" }, name: nameProperty, formula: { type: "string", minLength: 1, pattern: "\\S" }, label: { type: "string", minLength: 1 } }, required: ["type", "name", "formula"], additionalProperties: false },
-      ] },
+      type: "array",
     },
-    referenceBlockId: { type: "string", minLength: 1 },
-    placement: { type: "string", enum: ["before", "after"] },
+    placement: { enum: ["before", "after"], type: "string" },
+    referenceBlockId: { minLength: 1, type: "string" },
   },
   required: ["blocks"],
-  additionalProperties: false,
+  type: "object",
 } as const;
 
 const writeSectionSchema = {
-  type: "object",
+  additionalProperties: false,
   properties: {
-    heading: { type: "string", minLength: 1, description: "Section title." },
-    body: { type: "string", minLength: 1, pattern: "\\S", description: "One to three short paragraphs. Newlines start paragraphs; @name inserts a live value." },
-    inputs: {
-      type: "array",
-      description: "Assumptions the reader will change.",
-      items: {
-        type: "object",
-        properties: {
-          kind: { type: "string", enum: ["number", "slider", "select", "boolean"] },
-          name: { type: "string", pattern: "^[A-Za-z_][A-Za-z0-9_]*$" },
-          value: { type: "number" },
-          label: { type: "string", minLength: 1 },
-          format: { type: "string", enum: ["number", "currency", "percent", "unit"] },
-          min: { type: "number" },
-          max: { type: "number" },
-          step: { type: "number" },
-          unit: { type: "string", enum: UNITS },
-          currency: { type: "string", enum: CURRENCIES },
-          decimals: decimalsProperty,
-          options: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: { label: { type: "string" }, value: { type: "number" } },
-              required: ["label", "value"],
-              additionalProperties: false,
-            },
-          },
-        },
-        required: ["kind", "name", "value"],
-        additionalProperties: false,
-      },
+    body: {
+      description:
+        "One to three short paragraphs. Newlines start paragraphs; @name inserts a live value.",
+      minLength: 1,
+      pattern: "\\S",
+      type: "string",
     },
+    dry_run: { description: "Preview without writing.", type: "boolean" },
     formulas: {
-      type: "array",
       description: "Named formulas whose result is reused later.",
       items: {
-        type: "object",
+        additionalProperties: false,
         properties: {
-          name: { type: "string", pattern: "^[A-Za-z_][A-Za-z0-9_]*$" },
-          formula: { type: "string", minLength: 1, pattern: "\\S" },
-          label: { type: "string", minLength: 1 },
+          formula: { minLength: 1, pattern: "\\S", type: "string" },
+          label: { minLength: 1, type: "string" },
+          name: { pattern: "^[A-Za-z_][A-Za-z0-9_]*$", type: "string" },
         },
         required: ["name", "formula"],
-        additionalProperties: false,
+        type: "object",
       },
+      type: "array",
     },
-    referenceBlockId: { type: "string", minLength: 1, description: "Existing block id used as the insertion anchor. Omit to append." },
-    placement: { type: "string", enum: ["before", "after"], description: "Position relative to referenceBlockId; defaults to after." },
-    dry_run: { type: "boolean", description: "Preview without writing." },
+    heading: { description: "Section title.", minLength: 1, type: "string" },
+    inputs: {
+      description: "Assumptions the reader will change.",
+      items: {
+        additionalProperties: false,
+        properties: {
+          currency: { enum: CURRENCIES, type: "string" },
+          decimals: decimalsProperty,
+          format: {
+            enum: ["number", "currency", "percent", "unit"],
+            type: "string",
+          },
+          kind: {
+            enum: ["number", "slider", "select", "boolean"],
+            type: "string",
+          },
+          label: { minLength: 1, type: "string" },
+          max: { type: "number" },
+          min: { type: "number" },
+          name: { pattern: "^[A-Za-z_][A-Za-z0-9_]*$", type: "string" },
+          options: {
+            items: {
+              additionalProperties: false,
+              properties: {
+                label: { type: "string" },
+                value: { type: "number" },
+              },
+              required: ["label", "value"],
+              type: "object",
+            },
+            type: "array",
+          },
+          step: { type: "number" },
+          unit: { enum: UNITS, type: "string" },
+          value: { type: "number" },
+        },
+        required: ["kind", "name", "value"],
+        type: "object",
+      },
+      type: "array",
+    },
+    placement: {
+      description: "Position relative to referenceBlockId; defaults to after.",
+      enum: ["before", "after"],
+      type: "string",
+    },
+    referenceBlockId: {
+      description:
+        "Existing block id used as the insertion anchor. Omit to append.",
+      minLength: 1,
+      type: "string",
+    },
   },
   required: ["heading", "body"],
-  additionalProperties: false,
+  type: "object",
 } as const;
 
-const { dry_run: _sectionDryRun, ...writeSectionItemProperties } = writeSectionSchema.properties;
+const { dry_run: _sectionDryRun, ...writeSectionItemProperties } =
+  writeSectionSchema.properties;
 
 const writeSectionsSchema = {
-  type: "object",
+  additionalProperties: false,
   properties: {
-    sections: { type: "array", minItems: 1, items: { ...writeSectionSchema, properties: writeSectionItemProperties } },
-    dry_run: { type: "boolean", description: "Preview without writing." },
+    dry_run: { description: "Preview without writing.", type: "boolean" },
+    sections: {
+      items: { ...writeSectionSchema, properties: writeSectionItemProperties },
+      minItems: 1,
+      type: "array",
+    },
   },
   required: ["sections"],
-  additionalProperties: false,
+  type: "object",
 } as const;
 
-const updateId = { type: "string", minLength: 1 } as const;
+const updateId = { minLength: 1, type: "string" } as const;
 const namedValueProperties = {
   id: updateId,
-  name: inputProperties.name,
   label: inputProperties.label,
+  name: inputProperties.name,
   value: inputProperties.value,
 } as const;
 const numericUpdateProperties = {
   ...namedValueProperties,
-  format: inputProperties.format,
   currency: inputProperties.currency,
-  unit: inputProperties.unit,
   decimals: inputProperties.decimals,
-  min: inputProperties.min,
+  format: inputProperties.format,
   max: inputProperties.max,
+  min: inputProperties.min,
   step: inputProperties.step,
+  unit: inputProperties.unit,
 } as const;
 const updateBlockSchema = {
   anyOf: [
-    { type: "object", properties: { id: updateId, formula: { type: "string", minLength: 1, pattern: "\\S" } }, required: ["id", "formula"], additionalProperties: false },
-    { type: "object", properties: { id: updateId, text: { type: "string" }, level: { type: "integer", enum: [1, 2, 3] } }, required: ["id", "text"], additionalProperties: false },
-    { type: "object", properties: { id: updateId, level: { type: "integer", enum: [1, 2, 3] } }, required: ["id", "level"], additionalProperties: false },
-    { type: "object", properties: numericUpdateProperties, required: ["id"], minProperties: 2, additionalProperties: false },
-    { type: "object", properties: { ...namedValueProperties, options: inputProperties.options }, required: ["id"], minProperties: 2, additionalProperties: false },
-    { type: "object", properties: namedValueProperties, required: ["id"], minProperties: 2, additionalProperties: false },
+    {
+      additionalProperties: false,
+      properties: {
+        formula: { minLength: 1, pattern: "\\S", type: "string" },
+        id: updateId,
+      },
+      required: ["id", "formula"],
+      type: "object",
+    },
+    {
+      additionalProperties: false,
+      properties: {
+        id: updateId,
+        level: { enum: [1, 2, 3], type: "integer" },
+        text: { type: "string" },
+      },
+      required: ["id", "text"],
+      type: "object",
+    },
+    {
+      additionalProperties: false,
+      properties: { id: updateId, level: { enum: [1, 2, 3], type: "integer" } },
+      required: ["id", "level"],
+      type: "object",
+    },
+    {
+      additionalProperties: false,
+      minProperties: 2,
+      properties: numericUpdateProperties,
+      required: ["id"],
+      type: "object",
+    },
+    {
+      additionalProperties: false,
+      minProperties: 2,
+      properties: { ...namedValueProperties, options: inputProperties.options },
+      required: ["id"],
+      type: "object",
+    },
+    {
+      additionalProperties: false,
+      minProperties: 2,
+      properties: namedValueProperties,
+      required: ["id"],
+      type: "object",
+    },
   ],
 } as const;
 
 const updateBlocksSchema = {
-  type: "object",
-  properties: { blocks: { type: "array", minItems: 1, items: updateBlockSchema } },
-  required: ["blocks"],
   additionalProperties: false,
+  properties: {
+    blocks: { items: updateBlockSchema, minItems: 1, type: "array" },
+  },
+  required: ["blocks"],
+  type: "object",
 } as const;
 
 const variableSelectorProperties = {
-  name: { type: "string", pattern: "^[A-Za-z_][A-Za-z0-9_]*$" },
-  varId: { type: "string", minLength: 1 },
+  name: { pattern: "^[A-Za-z_][A-Za-z0-9_]*$", type: "string" },
+  varId: { minLength: 1, type: "string" },
 } as const;
 const variableSelectorSchema = {
-  type: "object",
-  properties: variableSelectorProperties,
-  oneOf: [{ required: ["name"] }, { required: ["varId"] }],
   additionalProperties: false,
+  oneOf: [{ required: ["name"] }, { required: ["varId"] }],
+  properties: variableSelectorProperties,
+  type: "object",
 } as const;
 const removeVariableSchema = {
-  type: "object",
-  properties: { ...variableSelectorProperties, force: { type: "boolean" } },
-  oneOf: [{ required: ["name"] }, { required: ["varId"] }],
   additionalProperties: false,
+  oneOf: [{ required: ["name"] }, { required: ["varId"] }],
+  properties: { ...variableSelectorProperties, force: { type: "boolean" } },
+  type: "object",
 } as const;
 
 const removeBlocksSchema = {
-  type: "object",
+  additionalProperties: false,
   properties: {
     ids: {
-      type: "array",
-      minItems: 1,
-      uniqueItems: true,
-      items: { type: "string", minLength: 1 },
       description: "Block ids to remove.",
+      items: { minLength: 1, type: "string" },
+      minItems: 1,
+      type: "array",
+      uniqueItems: true,
     },
   },
   required: ["ids"],
-  additionalProperties: false,
+  type: "object",
 } as const;
 
 const replaceParagraphSchema = {
-  type: "object",
+  additionalProperties: false,
   properties: {
-    id: { type: "string", minLength: 1, description: "Paragraph block id." },
-    text: { type: "string", description: "Replacement plain text." },
+    id: { description: "Paragraph block id.", minLength: 1, type: "string" },
+    text: { description: "Replacement plain text.", type: "string" },
   },
   required: ["id", "text"],
-  additionalProperties: false,
+  type: "object",
 } as const;
 
 const inlineRefSchema = {
-  type: "object",
+  additionalProperties: false,
   properties: {
-    blockId: { type: "string", minLength: 1, description: "Paragraph block id." },
-    variable: { type: "string", minLength: 1, description: "Variable name to reference." },
-    label: { type: "string", minLength: 1, description: "Optional displayed label." },
+    blockId: {
+      description: "Paragraph block id.",
+      minLength: 1,
+      type: "string",
+    },
+    label: {
+      description: "Optional displayed label.",
+      minLength: 1,
+      type: "string",
+    },
     offset: {
-      type: "integer",
-      minimum: 0,
       description: "Optional UTF-16 insertion offset; omit to append.",
+      minimum: 0,
+      type: "integer",
+    },
+    variable: {
+      description: "Variable name to reference.",
+      minLength: 1,
+      type: "string",
     },
   },
   required: ["blockId", "variable"],
-  additionalProperties: false,
+  type: "object",
 } as const;
 
 const setVariableSchema = {
-  type: "object",
+  additionalProperties: false,
   properties: {
-    name: { type: "string", minLength: 1, description: "Variable name." },
+    name: { description: "Variable name.", minLength: 1, type: "string" },
     value: {
-      type: "number",
       description: "New finite numeric variable value.",
+      type: "number",
     },
   },
   required: ["name", "value"],
-  additionalProperties: false,
+  type: "object",
 } as const;
 
 const scenarioNameSchema = {
-  type: "object",
-  properties: { name: { type: "string", minLength: 1, description: "Scenario name." } },
-  required: ["name"],
   additionalProperties: false,
+  properties: {
+    name: { description: "Scenario name.", minLength: 1, type: "string" },
+  },
+  required: ["name"],
+  type: "object",
 } as const;
 
 const saveScenarioSchema = {
-  type: "object",
+  additionalProperties: false,
   properties: {
-    name: { type: "string", minLength: 1, description: "Scenario name." },
-    values: { type: "object", description: "Optional values keyed by input name.", additionalProperties: { type: "number" } },
+    name: { description: "Scenario name.", minLength: 1, type: "string" },
+    values: {
+      additionalProperties: { type: "number" },
+      description: "Optional values keyed by input name.",
+      type: "object",
+    },
   },
   required: ["name"],
-  additionalProperties: false,
+  type: "object",
 } as const;
 
 const readOnly = { readOnlyHint: true } as const;
 
 function withoutStacks(value: unknown, seen = new WeakSet<object>()): unknown {
-  if (value === null || typeof value !== "object") return value;
-  if (seen.has(value)) return "[circular]";
+  if (value === null || typeof value !== "object") {
+    return value;
+  }
+  if (seen.has(value)) {
+    return "[circular]";
+  }
   seen.add(value);
 
   if (Array.isArray(value)) {
@@ -316,7 +497,9 @@ function withoutStacks(value: unknown, seen = new WeakSet<object>()): unknown {
 
   const clean: Record<string, unknown> = {};
   for (const [key, item] of Object.entries(value)) {
-    if (key.toLowerCase() === "stack") continue;
+    if (key.toLowerCase() === "stack") {
+      continue;
+    }
     clean[key] = withoutStacks(item, seen);
   }
   return clean;
@@ -324,9 +507,12 @@ function withoutStacks(value: unknown, seen = new WeakSet<object>()): unknown {
 
 function failure(error: unknown): ModeloToolFailure {
   if (error && typeof error === "object") {
-    const candidate = error as { code?: unknown; message?: unknown; details?: unknown };
+    const candidate = error as {
+      code?: unknown;
+      message?: unknown;
+      details?: unknown;
+    };
     const result: ModeloToolFailure = {
-      ok: false,
       error: {
         code:
           typeof candidate.code === "string" && candidate.code.length > 0
@@ -337,6 +523,7 @@ function failure(error: unknown): ModeloToolFailure {
             ? candidate.message
             : "The operation could not be completed.",
       },
+      ok: false,
     };
     if (candidate.details !== undefined) {
       result.error.details = withoutStacks(candidate.details);
@@ -345,15 +532,20 @@ function failure(error: unknown): ModeloToolFailure {
   }
 
   return {
-    ok: false,
     error: {
       code: "INTERNAL_ERROR",
-      message: typeof error === "string" && error.length > 0 ? error : "The operation could not be completed.",
+      message:
+        typeof error === "string" && error.length > 0
+          ? error
+          : "The operation could not be completed.",
     },
+    ok: false,
   };
 }
 
-async function run(operation: () => unknown | Promise<unknown>): Promise<unknown | ModeloToolFailure> {
+async function run(
+  operation: () => unknown | Promise<unknown>
+): Promise<unknown | ModeloToolFailure> {
   try {
     const result = await operation();
     return result instanceof Error ? failure(result) : result;
@@ -364,11 +556,11 @@ async function run(operation: () => unknown | Promise<unknown>): Promise<unknown
 
 function noNotebook(): ModeloToolFailure {
   return {
-    ok: false,
     error: {
       code: "NO_NOTEBOOK_OPEN",
       message: "Open a notebook before using document tools.",
     },
+    ok: false,
   };
 }
 
@@ -382,204 +574,225 @@ export interface ModeloToolsState {
 /** Registers Modelo's workspace tools and the tools for the currently open notebook. */
 export function useModeloTools(adapter: ModeloToolsAdapter): ModeloToolsState {
   const workspaceList = useWebMCP({
-    name: "list_notebooks",
-    description: "List the notebooks in the Modelo workspace and identify the currently open notebook.",
-    inputSchema: emptySchema,
     annotations: readOnly,
+    description:
+      "List the notebooks in the Modelo workspace and identify the currently open notebook.",
     execute: () => run(() => adapter.workspace.list()),
+    inputSchema: emptySchema,
+    name: "list_notebooks",
   });
   const workspaceOpen = useWebMCP<WorkspaceOpenArgs>({
-    name: "open_notebook",
     description: "Open an existing workspace notebook by id.",
-    inputSchema: idSchema,
     execute: (args) => run(() => adapter.workspace.open(args)),
+    inputSchema: idSchema,
+    name: "open_notebook",
   });
   const workspaceCreate = useWebMCP<WorkspaceCreateArgs>({
-    name: "create_notebook",
-    description: "Create and open an empty notebook with narrative-first composition guidance.",
-    inputSchema: createSchema,
+    description:
+      "Create and open an empty notebook with narrative-first composition guidance.",
     execute: (args) => run(() => adapter.workspace.create(args)),
+    inputSchema: createSchema,
+    name: "create_notebook",
   });
   const workspaceDuplicate = useWebMCP<WorkspaceDuplicateArgs>({
-    name: "duplicate_notebook",
     description: "Duplicate an existing workspace notebook.",
-    inputSchema: duplicateSchema,
     execute: (args) => run(() => adapter.workspace.duplicate(args)),
+    inputSchema: duplicateSchema,
+    name: "duplicate_notebook",
   });
   const workspaceDelete = useWebMCP<WorkspaceDeleteArgs>({
-    name: "delete_notebook",
     description: "Permanently delete a workspace notebook by id.",
-    inputSchema: idSchema,
     execute: (args) => run(() => adapter.workspace.delete(args)),
+    inputSchema: idSchema,
+    name: "delete_notebook",
   });
   const workspaceRename = useWebMCP<WorkspaceRenameArgs>({
-    name: "rename_notebook",
     description: "Rename a workspace notebook.",
-    inputSchema: renameSchema,
     execute: (args) => run(() => adapter.workspace.rename(args)),
+    inputSchema: renameSchema,
+    name: "rename_notebook",
   });
 
   const notebookEnabled = adapter.notebook !== null;
-  const callNotebook = (operation: (notebook: NonNullable<ModeloToolsAdapter["notebook"]>) => unknown) =>
+  const callNotebook = (
+    operation: (
+      notebook: NonNullable<ModeloToolsAdapter["notebook"]>
+    ) => unknown
+  ) =>
     run(() => (adapter.notebook ? operation(adapter.notebook) : noNotebook()));
 
   const notebookGetDocument = useWebMCP({
-    name: "get_document",
-    description: "Get ordered blocks and composition, so you can see whether the page reads like a story.",
-    inputSchema: emptySchema,
     annotations: readOnly,
+    description:
+      "Get ordered blocks and composition, so you can see whether the page reads like a story.",
     enabled: notebookEnabled,
     execute: () => callNotebook((notebook) => notebook.getDocument()),
+    inputSchema: emptySchema,
+    name: "get_document",
   });
   const notebookGetModel = useWebMCP<NotebookGetModelArgs>({
-    name: "get_model",
-    description: "Get slim variables, formulas, computed values, and evaluation errors from the open notebook.",
-    inputSchema: getModelSchema,
     annotations: readOnly,
+    description:
+      "Get slim variables, formulas, computed values, and evaluation errors from the open notebook.",
     enabled: notebookEnabled,
     execute: (args) => callNotebook((notebook) => notebook.getModel(args)),
+    inputSchema: getModelSchema,
+    name: "get_model",
   });
   const notebookFindReferences = useWebMCP<NotebookFindReferencesArgs>({
-    name: "find_references",
-    description: "Find formula and paragraph block ids that reference one variable by name or stable varId.",
-    inputSchema: variableSelectorSchema,
     annotations: readOnly,
+    description:
+      "Find formula and paragraph block ids that reference one variable by name or stable varId.",
     enabled: notebookEnabled,
-    execute: (args) => callNotebook((notebook) => notebook.findReferences(args)),
+    execute: (args) =>
+      callNotebook((notebook) => notebook.findReferences(args)),
+    inputSchema: variableSelectorSchema,
+    name: "find_references",
   });
   const notebookInsertBlocks = useWebMCP<NotebookInsertBlocksArgs>({
-    name: "insert_blocks",
-    description: "Low-level block insert for surgery. Prefer write_section when adding new content.",
-    inputSchema: insertBlocksSchema,
+    description:
+      "Low-level block insert for surgery. Prefer write_section when adding new content.",
     enabled: notebookEnabled,
     execute: (args) => callNotebook((notebook) => notebook.insertBlocks(args)),
+    inputSchema: insertBlocksSchema,
+    name: "insert_blocks",
   });
   const notebookWriteSection = useWebMCP<NotebookWriteSectionArgs>({
-    name: "write_section",
-    description: "Add one prose-first section. Use format number for counts/loan terms; unit year means a duration. Supports dry_run.",
-    inputSchema: writeSectionSchema,
+    description:
+      "Add one prose-first section. Use format number for counts/loan terms; unit year means a duration. Supports dry_run.",
     enabled: notebookEnabled,
     execute: (args) => callNotebook((notebook) => notebook.writeSection(args)),
+    inputSchema: writeSectionSchema,
+    name: "write_section",
   });
   const notebookWriteSections = useWebMCP<NotebookWriteSectionsArgs>({
-    name: "write_sections",
-    description: "Add sections atomically, or preview with dry_run. Examples: 1 + mortgage_rate; price * (1 + tax_rate); principal * rate / 12; 5 km + 500 m. Percent inputs are formula ratios. Use number for counts/loan terms; unit year is a duration.",
-    inputSchema: writeSectionsSchema,
+    description:
+      "Add sections atomically, or preview with dry_run. Examples: 1 + mortgage_rate; price * (1 + tax_rate); principal * rate / 12; 5 km + 500 m. Percent inputs are formula ratios. Use number for counts/loan terms; unit year is a duration.",
     enabled: notebookEnabled,
     execute: (args) => callNotebook((notebook) => notebook.writeSections(args)),
+    inputSchema: writeSectionsSchema,
+    name: "write_sections",
   });
   const notebookUpdateBlock = useWebMCP<NotebookUpdateBlockArgs>({
-    name: "update_block",
     description: "Apply a partial update to one block in the open notebook.",
-    inputSchema: updateBlockSchema,
     enabled: notebookEnabled,
     execute: (args) => callNotebook((notebook) => notebook.updateBlock(args)),
+    inputSchema: updateBlockSchema,
+    name: "update_block",
   });
   const notebookUpdateBlocks = useWebMCP<NotebookUpdateBlocksArgs>({
-    name: "update_blocks",
     description: "Update multiple blocks atomically.",
-    inputSchema: updateBlocksSchema,
     enabled: notebookEnabled,
     execute: (args) => callNotebook((notebook) => notebook.updateBlocks(args)),
+    inputSchema: updateBlocksSchema,
+    name: "update_blocks",
   });
   const notebookRemoveBlocks = useWebMCP<NotebookRemoveBlocksArgs>({
-    name: "remove_blocks",
-    description: "Remove one or more blocks from the open notebook in one operation.",
-    inputSchema: removeBlocksSchema,
+    description:
+      "Remove one or more blocks from the open notebook in one operation.",
     enabled: notebookEnabled,
     execute: (args) => callNotebook((notebook) => notebook.removeBlocks(args)),
+    inputSchema: removeBlocksSchema,
+    name: "remove_blocks",
   });
   const notebookRemoveVariable = useWebMCP<NotebookRemoveVariableArgs>({
-    name: "remove_variable",
-    description: "Remove an input variable. Refuses referenced variables unless force is true; never rewrites formulas or prose.",
-    inputSchema: removeVariableSchema,
+    description:
+      "Remove an input variable. Refuses referenced variables unless force is true; never rewrites formulas or prose.",
     enabled: notebookEnabled,
-    execute: (args) => callNotebook((notebook) => notebook.removeVariable(args)),
+    execute: (args) =>
+      callNotebook((notebook) => notebook.removeVariable(args)),
+    inputSchema: removeVariableSchema,
+    name: "remove_variable",
   });
   const notebookReplaceParagraph = useWebMCP<NotebookReplaceParagraphArgs>({
-    name: "replace_paragraph",
-    description: "Replace all plain text in a paragraph block while preserving the block id.",
-    inputSchema: replaceParagraphSchema,
+    description:
+      "Replace all plain text in a paragraph block while preserving the block id.",
     enabled: notebookEnabled,
-    execute: (args) => callNotebook((notebook) => notebook.replaceParagraph(args)),
+    execute: (args) =>
+      callNotebook((notebook) => notebook.replaceParagraph(args)),
+    inputSchema: replaceParagraphSchema,
+    name: "replace_paragraph",
   });
   const notebookInsertInlineRef = useWebMCP<NotebookInsertInlineRefArgs>({
-    name: "insert_inline_ref",
-    description: "Insert an inline reference to a notebook variable into a paragraph.",
-    inputSchema: inlineRefSchema,
+    description:
+      "Insert an inline reference to a notebook variable into a paragraph.",
     enabled: notebookEnabled,
-    execute: (args) => callNotebook((notebook) => notebook.insertInlineRef(args)),
+    execute: (args) =>
+      callNotebook((notebook) => notebook.insertInlineRef(args)),
+    inputSchema: inlineRefSchema,
+    name: "insert_inline_ref",
   });
   const notebookSetVariable = useWebMCP<NotebookSetVariableArgs>({
-    name: "set_variable",
     description: "Set the value of an existing variable in the open notebook.",
-    inputSchema: setVariableSchema,
     enabled: notebookEnabled,
     execute: (args) => callNotebook((notebook) => notebook.setVariable(args)),
+    inputSchema: setVariableSchema,
+    name: "set_variable",
   });
   const notebookListScenarios = useWebMCP({
-    name: "list_scenarios",
-    description: "List saved input scenarios and the active one.",
-    inputSchema: emptySchema,
     annotations: readOnly,
+    description: "List saved input scenarios and the active one.",
     enabled: notebookEnabled,
     execute: () => callNotebook((notebook) => notebook.listScenarios()),
+    inputSchema: emptySchema,
+    name: "list_scenarios",
   });
   const notebookSaveScenario = useWebMCP<NotebookSaveScenarioArgs>({
-    name: "save_scenario",
     description: "Save or overwrite a named input scenario.",
-    inputSchema: saveScenarioSchema,
     enabled: notebookEnabled,
     execute: (args) => callNotebook((notebook) => notebook.saveScenario(args)),
+    inputSchema: saveScenarioSchema,
+    name: "save_scenario",
   });
   const notebookApplyScenario = useWebMCP<NotebookScenarioArgs>({
-    name: "apply_scenario",
     description: "Apply a named input scenario.",
-    inputSchema: scenarioNameSchema,
     enabled: notebookEnabled,
     execute: (args) => callNotebook((notebook) => notebook.applyScenario(args)),
+    inputSchema: scenarioNameSchema,
+    name: "apply_scenario",
   });
   const notebookDeleteScenario = useWebMCP<NotebookScenarioArgs>({
-    name: "delete_scenario",
     description: "Delete a named input scenario.",
-    inputSchema: scenarioNameSchema,
     enabled: notebookEnabled,
-    execute: (args) => callNotebook((notebook) => notebook.deleteScenario(args)),
+    execute: (args) =>
+      callNotebook((notebook) => notebook.deleteScenario(args)),
+    inputSchema: scenarioNameSchema,
+    name: "delete_scenario",
   });
 
   const tools: Record<string, WebMCPState> = {
-    workspace_list: workspaceList,
-    workspace_open: workspaceOpen,
-    workspace_create: workspaceCreate,
-    workspace_duplicate: workspaceDuplicate,
-    workspace_delete: workspaceDelete,
-    workspace_rename: workspaceRename,
+    notebook_apply_scenario: notebookApplyScenario,
+    notebook_delete_scenario: notebookDeleteScenario,
+    notebook_find_references: notebookFindReferences,
     notebook_get_document: notebookGetDocument,
     notebook_get_model: notebookGetModel,
-    notebook_find_references: notebookFindReferences,
-    notebook_write_section: notebookWriteSection,
-    notebook_write_sections: notebookWriteSections,
     notebook_insert_blocks: notebookInsertBlocks,
-    notebook_update_block: notebookUpdateBlock,
-    notebook_update_blocks: notebookUpdateBlocks,
+    notebook_insert_inline_ref: notebookInsertInlineRef,
+    notebook_list_scenarios: notebookListScenarios,
     notebook_remove_blocks: notebookRemoveBlocks,
     notebook_remove_variable: notebookRemoveVariable,
     notebook_replace_paragraph: notebookReplaceParagraph,
-    notebook_insert_inline_ref: notebookInsertInlineRef,
-    notebook_set_variable: notebookSetVariable,
-    notebook_list_scenarios: notebookListScenarios,
     notebook_save_scenario: notebookSaveScenario,
-    notebook_apply_scenario: notebookApplyScenario,
-    notebook_delete_scenario: notebookDeleteScenario,
+    notebook_set_variable: notebookSetVariable,
+    notebook_update_block: notebookUpdateBlock,
+    notebook_update_blocks: notebookUpdateBlocks,
+    notebook_write_section: notebookWriteSection,
+    notebook_write_sections: notebookWriteSections,
+    workspace_create: workspaceCreate,
+    workspace_delete: workspaceDelete,
+    workspace_duplicate: workspaceDuplicate,
+    workspace_list: workspaceList,
+    workspace_open: workspaceOpen,
+    workspace_rename: workspaceRename,
   };
   const states = Object.values(tools);
 
   return {
-    supported: states.some((state) => state.supported),
+    errors: states.flatMap((state) => (state.error ? [state.error] : [])),
     registered: states
       .filter((_, index) => notebookEnabled || index < 6)
       .every((state) => state.registered),
-    errors: states.flatMap((state) => (state.error ? [state.error] : [])),
+    supported: states.some((state) => state.supported),
     tools,
   };
 }

@@ -37,63 +37,99 @@ export class DuplicateVariableIdError extends ModelValidationError {
 }
 
 const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
-const inputTypes = new Set(["modelVariable", "variable", "number", "slider", "select", "boolean"]);
+const inputTypes = new Set([
+  "modelVariable",
+  "variable",
+  "number",
+  "slider",
+  "select",
+  "boolean",
+]);
 const formulaTypes = new Set(["modelFormula", "formula"]);
 
-function validateIdentity(varId: unknown, name: unknown): asserts varId is string {
+function validateIdentity(
+  varId: unknown,
+  name: unknown
+): asserts varId is string {
   if (typeof varId !== "string" || varId.trim() === "") {
-    throw new ModelValidationError("Every model variable requires a non-empty varId");
+    throw new ModelValidationError(
+      "Every model variable requires a non-empty varId"
+    );
   }
   if (typeof name !== "string" || !IDENTIFIER.test(name)) {
     throw new ModelValidationError(`Invalid variable name: ${String(name)}`);
   }
 }
 
-function validateDecimals(decimals: unknown, name: unknown): number | undefined {
-  if (decimals === undefined || decimals === -1) return undefined;
-  if (!Number.isInteger(decimals) || (decimals as number) < 0 || (decimals as number) > 8) {
-    throw new ModelValidationError(`Invalid decimals for ${String(name)}: expected an integer from 0 to 8`);
+function validateDecimals(
+  decimals: unknown,
+  name: unknown
+): number | undefined {
+  if (decimals === undefined || decimals === -1) {
+    return undefined;
+  }
+  if (
+    !Number.isInteger(decimals) ||
+    (decimals as number) < 0 ||
+    (decimals as number) > 8
+  ) {
+    throw new ModelValidationError(
+      `Invalid decimals for ${String(name)}: expected an integer from 0 to 8`
+    );
   }
   return decimals as number;
 }
 
 function visit(blocks: ModeloDocument, output: ProjectedVariable[]): void {
   for (const block of blocks) {
-    const props = block.props as Partial<VariableProps & FormulaProps> | undefined;
+    const props = block.props as
+      | Partial<VariableProps & FormulaProps>
+      | undefined;
     if (inputTypes.has(block.type)) {
       validateIdentity(props?.varId, props?.name);
       if (typeof props?.value !== "number") {
-        throw new ModelValidationError(`Input ${props?.name} requires a numeric value`);
+        throw new ModelValidationError(
+          `Input ${props?.name} requires a numeric value`
+        );
       }
       output.push({
-        kind: "input",
         blockId: block.id,
-        varId: props.varId,
-        name: props.name as string,
-        value: block.type === "boolean" ? (props.value ? 1 : 0) : props.value,
-        inputType: block.type === "boolean" ? "boolean" : ["number", "slider", "select"].includes(block.type) ? block.type as "number" | "slider" | "select" : undefined,
-        format: props.format,
         currency: props.currency,
-        unit: props.unit,
-        locale: props.locale,
         decimals: validateDecimals(props.decimals, props.name),
-        min: props.min,
+        format: props.format,
+        inputType:
+          block.type === "boolean"
+            ? "boolean"
+            : (["number", "slider", "select"].includes(block.type)
+              ? (block.type as "number" | "slider" | "select")
+              : undefined),
+        kind: "input",
+        locale: props.locale,
         max: props.max,
+        min: props.min,
+        name: props.name as string,
+        unit: props.unit,
+        value: block.type === "boolean" ? (props.value ? 1 : 0) : props.value,
+        varId: props.varId,
       } satisfies ProjectedInput);
     } else if (formulaTypes.has(block.type)) {
       validateIdentity(props?.varId, props?.name);
       if (typeof props?.formula !== "string" || props.formula.trim() === "") {
-        throw new ModelValidationError(`Formula ${props?.name} requires an expression`);
+        throw new ModelValidationError(
+          `Formula ${props?.name} requires an expression`
+        );
       }
       output.push({
-        kind: "formula",
         blockId: block.id,
-        varId: props.varId,
-        name: props.name as string,
         formula: props.formula,
+        kind: "formula",
+        name: props.name as string,
+        varId: props.varId,
       } satisfies ProjectedFormula);
     }
-    if (Array.isArray(block.children)) visit(block.children as ModeloBlock[], output);
+    if (Array.isArray(block.children)) {
+      visit(block.children as ModeloBlock[], output);
+    }
   }
 }
 
@@ -105,15 +141,15 @@ export function projectDocument(document: ModeloDocument): ProjectedModel {
   const byId: Record<string, ProjectedVariable> = Object.create(null);
   const idByName: Record<string, string> = Object.create(null);
   for (const variable of variables) {
-    if (Object.prototype.hasOwnProperty.call(byId, variable.varId)) {
+    if (Object.hasOwn(byId, variable.varId)) {
       throw new DuplicateVariableIdError(variable.varId);
     }
-    if (Object.prototype.hasOwnProperty.call(idByName, variable.name)) {
+    if (Object.hasOwn(idByName, variable.name)) {
       throw new DuplicateVariableNameError(variable.name);
     }
     byId[variable.varId] = variable;
     idByName[variable.name] = variable.varId;
   }
 
-  return { variables, byId, idByName };
+  return { byId, idByName, variables };
 }
