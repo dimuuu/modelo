@@ -163,7 +163,7 @@ describe("Modelo app smoke", () => {
     ).toHaveLength(1);
   });
 
-  it("renders every model block as one line of name, control, and value", async () => {
+  it("gives every model block one responsive, usable control", async () => {
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
@@ -209,6 +209,13 @@ describe("Modelo app smoke", () => {
                 value: 1,
                 varId: "hired-id",
               },
+              {
+                formula: "price * 2",
+                id: "formula",
+                name: "total",
+                type: "formula",
+                varId: "total-id",
+              },
             ],
             id: "config",
             scenarios: [],
@@ -221,16 +228,59 @@ describe("Modelo app smoke", () => {
     renderApp();
     await openNotebook();
 
+    const number = await screen.findByRole("spinbutton", { name: "price" });
+    const slider = screen.getByLabelText("growth");
+    const select = screen.getByRole("combobox", { name: "tier" });
+    const toggle = screen.getByRole("switch", { name: "hired" });
+    const formula = screen.getByRole("textbox", {
+      name: "total expression",
+    });
+
+    expect(number).toHaveProperty("value", "12");
+    expect(select.textContent).toContain("Basic");
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
+    expect(formula).toHaveProperty("value", "price * 2");
+
+    for (const control of [number, slider, select, toggle, formula]) {
+      const block = control.closest(".modelo-block");
+      expect(block).not.toBeNull();
+      expect(block?.classList).toContain("flex-col");
+      expect(block?.classList).toContain("md:flex-row");
+      expect(block?.classList).toContain("min-w-0");
+    }
+
+    // Editable controls use phone-safe type and touch sizing, then return to
+    // the compact one-line treatment at the desktop breakpoint.
+    for (const control of [number, select, formula]) {
+      expect(control.classList).toContain("text-base");
+      expect(control.classList).toContain("md:text-[13px]");
+      expect(control.classList).toContain("h-11");
+      expect(control.classList).toContain("md:h-7");
+    }
+    expect(number.classList).toContain("w-full");
+    expect(select.classList).toContain("w-full");
+    expect(slider.classList).toContain("min-h-11");
+    expect(slider.classList).toContain("w-full");
+    expect(toggle.parentElement?.classList).toContain("min-h-11");
+    expect(formula.classList).toContain("min-w-0");
+    expect(formula.classList).toContain("w-full");
+    for (const name of screen.getAllByRole("textbox", {
+      name: "Variable name",
+    })) {
+      expect(name.classList).toContain("text-base");
+      expect(name.classList).toContain("md:text-[13px]");
+    }
+
+    // Responsive markup must not duplicate stateful controls.
+    expect(screen.getAllByRole("spinbutton", { name: "price" })).toHaveLength(
+      1
+    );
+    expect(screen.getAllByLabelText("growth")).toHaveLength(1);
+    expect(screen.getAllByRole("combobox", { name: "tier" })).toHaveLength(1);
+    expect(screen.getAllByRole("switch", { name: "hired" })).toHaveLength(1);
     expect(
-      await screen.findByRole("spinbutton", { name: "price" })
-    ).toHaveProperty("value", "12");
-    expect(screen.getByLabelText("growth")).toBeTruthy();
-    expect(
-      screen.getByRole("combobox", { name: "tier" }).textContent
-    ).toContain("Basic");
-    expect(
-      screen.getByRole("switch", { name: "hired" }).getAttribute("aria-checked")
-    ).toBe("true");
+      screen.getAllByRole("textbox", { name: "total expression" })
+    ).toHaveLength(1);
 
     // Configuration lives behind the six dots, never in the block itself.
     for (const label of [

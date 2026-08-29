@@ -157,7 +157,7 @@ function Value({
     );
   }
   return (
-    <span className="text-foreground shrink-0 text-sm font-semibold whitespace-nowrap tabular-nums">
+    <span className="text-foreground max-w-full shrink-0 overflow-x-auto text-sm font-semibold whitespace-nowrap tabular-nums">
       {renderValue(variable, fallback, boolean)}
     </span>
   );
@@ -167,12 +167,12 @@ function Value({
 function VariableName({
   block,
   editor,
-  className = "field-sizing-content max-w-56 min-w-24 shrink-0",
+  className = "w-full min-w-0 md:field-sizing-content md:max-w-56 md:min-w-24 md:shrink-0",
 }: ModelBlockFields & { className?: string }) {
   return (
     <Input
       aria-label="Variable name"
-      className={`h-7 border-transparent bg-transparent px-1.5 text-[13px] font-semibold shadow-none ${className}`}
+      className={`h-11 border-transparent bg-transparent px-1.5 text-base font-semibold shadow-none md:h-7 md:text-[13px] ${className}`}
       defaultValue={block.props.name}
       onBlur={(event) => {
         const nextName = event.currentTarget.value.trim();
@@ -203,7 +203,7 @@ function VariableName({
  */
 function ModelBlock({ children }: { children: React.ReactNode }) {
   return (
-    <Card className="modelo-block bg-card focus-within:border-ring my-1.5 w-full flex-row items-center gap-2 rounded-lg px-4 py-2 shadow-none transition-colors duration-150 ease-out">
+    <Card className="modelo-block bg-card focus-within:border-ring my-1.5 w-full min-w-0 flex-col items-stretch gap-2 rounded-lg px-3 py-3 shadow-none transition-colors duration-150 ease-out md:flex-row md:items-center md:px-4 md:py-2">
       {children}
     </Card>
   );
@@ -212,7 +212,7 @@ function ModelBlock({ children }: { children: React.ReactNode }) {
 /** The right end of a block's one line, where the value sits. */
 function BlockEnd({ children }: { children: React.ReactNode }) {
   return (
-    <div className="ml-auto flex shrink-0 items-center gap-2 pl-2">
+    <div className="flex w-full min-w-0 items-center justify-end gap-2 md:ml-auto md:w-auto md:shrink-0 md:justify-start md:pl-2">
       {children}
     </div>
   );
@@ -234,7 +234,7 @@ const NumberBlock = createReactBlockSpec(
         <VariableName block={block} editor={editor} />
         <Input
           aria-label={block.props.name}
-          className="h-7 max-w-44 text-[13px]"
+          className="h-11 w-full min-w-0 text-base md:h-7 md:max-w-44 md:text-[13px]"
           max={block.props.max}
           min={block.props.min}
           onChange={(e) =>
@@ -270,7 +270,7 @@ const SliderBlock = createReactBlockSpec(
         <VariableName block={block} editor={editor} />
         <Slider
           aria-label={block.props.name}
-          className="min-w-24"
+          className="min-h-11 w-full min-w-0 md:min-h-0 md:min-w-24"
           max={block.props.max}
           min={block.props.min}
           onValueChange={(next) =>
@@ -323,7 +323,7 @@ const SelectBlock = createReactBlockSpec(
           >
             <SelectTrigger
               aria-label={block.props.name}
-              className="h-7 w-44 text-[13px]"
+              className="h-11 w-full min-w-0 text-base md:h-7 md:w-44 md:text-[13px]"
             >
               <SelectValue />
             </SelectTrigger>
@@ -353,13 +353,15 @@ const BooleanBlock = createReactBlockSpec(
     render: ({ block, editor }) => (
       <ModelBlock>
         <VariableName block={block} editor={editor} />
-        <Switch
-          aria-label={block.props.name}
-          checked={Boolean(block.props.value)}
-          onCheckedChange={(checked) =>
-            updateProps(editor, block, { value: checked ? 1 : 0 })
-          }
-        />
+        <div className="flex min-h-11 w-full items-center md:min-h-0 md:w-auto">
+          <Switch
+            aria-label={block.props.name}
+            checked={Boolean(block.props.value)}
+            onCheckedChange={(checked) =>
+              updateProps(editor, block, { value: checked ? 1 : 0 })
+            }
+          />
+        </div>
         <BlockEnd>
           <Value
             boolean
@@ -373,11 +375,11 @@ const BooleanBlock = createReactBlockSpec(
 );
 
 /** The `=` sign that separates the name, the formula, and the result. */
-function Equals() {
+function Equals({ className = "" }: { className?: string }) {
   return (
     <span
       aria-hidden="true"
-      className="text-muted-foreground shrink-0 text-[13px]"
+      className={`text-muted-foreground shrink-0 text-[13px] ${className}`}
     >
       =
     </span>
@@ -398,10 +400,10 @@ const FormulaBlock = createReactBlockSpec(
     render: ({ block, editor }) => (
       <ModelBlock>
         <VariableName block={block} editor={editor} />
-        <Equals />
+        <Equals className="hidden md:inline" />
         <Input
           aria-label={`${block.props.name} expression`}
-          className="field-sizing-content h-7 max-w-full min-w-32 text-[13px] tabular-nums"
+          className="h-11 w-full min-w-0 text-base tabular-nums md:field-sizing-content md:h-7 md:max-w-full md:min-w-32 md:text-[13px]"
           onChange={(e) =>
             updateProps(editor, block, { formula: e.target.value })
           }

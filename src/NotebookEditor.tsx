@@ -125,7 +125,7 @@ export function NotebookEditor({
 
   return (
     <ModelProvider value={model}>
-      <div className="mx-auto max-w-[900px] pb-24">
+      <div className="mx-auto w-full max-w-[900px] min-w-0 pb-24">
         <BlockNoteView
           editor={editor}
           theme={colorScheme}
