@@ -4,7 +4,40 @@ import {
   getDefaultReactSlashMenuItems,
   useCreateBlockNote,
 } from "@blocknote/react";
+import {
+  CopyIcon,
+  DownloadIcon,
+  PlusIcon,
+  UploadIcon,
+  XIcon,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
+
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { Toaster } from "@/components/ui/sonner";
 
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
@@ -43,7 +76,7 @@ import {
 } from "./workspace";
 import type { Notebook, Workspace } from "./workspace";
 
-import "./styles.css";
+import "./blocknote-theme.css";
 
 const uid = () => crypto.randomUUID();
 const ok = (data: unknown = {}) => ({ data, ok: true });
@@ -313,7 +346,7 @@ function NotebookEditor({
 
   return (
     <ModelProvider value={model}>
-      <div className="editor-shell">
+      <div className="mx-auto max-w-[900px] pb-24">
         <BlockNoteView
           editor={editor}
           theme="light"
@@ -340,6 +373,11 @@ export default function App() {
   const [openId, setOpenId] = useState<string | null>(
     () => loadWorkspace().notebooks[0]?.id ?? null
   );
+  const [scenarioDialogOpen, setScenarioDialogOpen] = useState(false);
+  const [scenarioName, setScenarioName] = useState("");
+  const [pendingDelete, setPendingDelete] = useState<
+    { kind: "notebook"; id: string; title: string } | { kind: "scenario"; name: string } | null
+  >(null);
   const editorRef = useRef<ModeloEditor | null>(null);
   const workspaceRef = useRef(workspace);
   const openIdRef = useRef(openId);
@@ -1252,35 +1290,35 @@ export default function App() {
 
   const createNotebook = () =>
     adapter.workspace.create({ name: "Untitled notebook" });
-  const deleteNotebook = (id: string) => {
-    if (confirm("Delete this notebook?")) {
-      adapter.workspace.delete({ id });
+
+  const importWorkspace = async (file: File) => {
+    try {
+      const parsed = JSON.parse(await file.text());
+      if (parsed.version !== 1 || !Array.isArray(parsed.notebooks)) {
+        throw new Error("Not a Modelo workspace export");
+      }
+      const normalized = {
+        ...parsed,
+        currency: parsed.currency || DEFAULT_CURRENCY,
+        locale: parsed.locale || DEFAULT_LOCALE,
+        notebooks: parsed.notebooks.map((notebook: Notebook) => ({
+          ...notebook,
+          scenarios: Array.isArray(notebook.scenarios)
+            ? notebook.scenarios
+            : [],
+        })),
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+      setWorkspace(normalized);
+      setOpenId(normalized.notebooks[0]?.id ?? null);
+      toast.success(`Imported ${normalized.notebooks.length} notebooks.`);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not import workspace."
+      );
     }
   };
-  const importWorkspace = (file: File) =>
-    file
-      .text()
-      .then((text) => {
-        const parsed = JSON.parse(text);
-        if (parsed.version !== 1 || !Array.isArray(parsed.notebooks)) {
-          throw new Error("Not a Modelo workspace export");
-        }
-        const normalized = {
-          ...parsed,
-          currency: parsed.currency || DEFAULT_CURRENCY,
-          locale: parsed.locale || DEFAULT_LOCALE,
-          notebooks: parsed.notebooks.map((notebook: Notebook) => ({
-            ...notebook,
-            scenarios: Array.isArray(notebook.scenarios)
-              ? notebook.scenarios
-              : [],
-          })),
-        };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
-        setWorkspace(normalized);
-        setOpenId(normalized.notebooks[0]?.id ?? null);
-      })
-      .catch((error) => alert(error.message));
+
   const activeScenario =
     openNotebook && editorRef.current
       ? matchingScenarioName(
@@ -1288,151 +1326,301 @@ export default function App() {
           openNotebook.scenarios ?? []
         )
       : null;
+
   const saveCurrentScenario = () => {
-    const name = prompt("Scenario name");
-    if (name?.trim()) {
-      try {
-        adapter.notebook?.saveScenario({ name });
-      } catch (error) {
-        alert(
-          (error as { message?: string }).message ?? "Could not save scenario."
-        );
-      }
+    const name = scenarioName.trim();
+    if (!name) {
+      return;
     }
-  };
-  const deleteSavedScenario = (name: string) => {
-    if (confirm(`Delete scenario '${name}'?`)) {
-      adapter.notebook?.deleteScenario({ name });
+    try {
+      adapter.notebook?.saveScenario({ name });
+      setScenarioName("");
+      setScenarioDialogOpen(false);
+      toast.success(`Saved scenario '${name}'.`);
+    } catch (error) {
+      toast.error(
+        (error as { message?: string }).message ?? "Could not save scenario."
+      );
     }
   };
 
   return (
-    <div className="app">
-      <aside className="sidebar">
-        <button className="wordmark" onClick={() => setOpenId(null)}>
+    <div className="grid min-h-screen grid-cols-1 md:grid-cols-[250px_minmax(0,1fr)]">
+      <aside className="flex max-h-[42vh] flex-col gap-3 border-b bg-sidebar p-3 md:sticky md:top-0 md:h-screen md:max-h-none md:border-r md:border-b-0">
+        <Button
+          className="justify-start px-2 font-bold text-[19px] tracking-tight"
+          onClick={() => setOpenId(null)}
+          size="lg"
+          type="button"
+          variant="ghost"
+        >
           Modelo
-        </button>
-        <button className="new-button" onClick={createNotebook}>
-          + New notebook
-        </button>
-        <nav>
+        </Button>
+        <Button className="justify-start" onClick={createNotebook} type="button">
+          <PlusIcon />
+          New notebook
+        </Button>
+        <nav className="-mx-1 flex flex-col gap-0.5 overflow-y-auto px-1">
           {workspace.notebooks.map((notebook) => (
             <div
-              className={`notebook-row ${notebook.id === openId ? "active" : ""}`}
+              className={`group grid grid-cols-[minmax(0,1fr)_auto_auto] items-center rounded-md ${
+                notebook.id === openId ? "bg-sidebar-accent" : ""
+              }`}
               key={notebook.id}
             >
-              <button
-                className="notebook-link"
+              <Button
+                className="justify-start truncate px-2 font-normal"
                 onClick={() => setOpenId(notebook.id)}
+                size="sm"
+                type="button"
+                variant="ghost"
               >
-                {notebook.title}
-              </button>
-              <button
-                title="Duplicate"
+                <span className="truncate">{notebook.title}</span>
+              </Button>
+              <Button
+                aria-label={`Duplicate ${notebook.title}`}
+                className="text-muted-foreground opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
                 onClick={() => adapter.workspace.duplicate({ id: notebook.id })}
+                size="icon-sm"
+                title="Duplicate"
+                type="button"
+                variant="ghost"
               >
-                ⧉
-              </button>
-              <button
+                <CopyIcon />
+              </Button>
+              <Button
+                aria-label={`Delete ${notebook.title}`}
+                className="text-muted-foreground opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
+                onClick={() =>
+                  setPendingDelete({
+                    id: notebook.id,
+                    kind: "notebook",
+                    title: notebook.title,
+                  })
+                }
+                size="icon-sm"
                 title="Delete"
-                onClick={() => deleteNotebook(notebook.id)}
+                type="button"
+                variant="ghost"
               >
-                ×
-              </button>
+                <XIcon />
+              </Button>
             </div>
           ))}
         </nav>
-        <div className="sidebar-footer">
-          <span className={`status ${webmcp.supported ? "on" : ""}`}>
+        <div className="mt-auto hidden flex-col gap-1 md:flex">
+          <Separator className="mb-2" />
+          <Badge
+            className="w-fit gap-1.5 font-normal"
+            variant={webmcp.supported ? "default" : "secondary"}
+          >
+            <span
+              className={`size-1.5 rounded-full ${
+                webmcp.supported ? "bg-current" : "bg-muted-foreground"
+              }`}
+            />
             {webmcp.supported ? "WebMCP ready" : "WebMCP unavailable"}
-          </span>
-          <button onClick={() => download("modelo-workspace.json", workspace)}>
+          </Badge>
+          <Button
+            className="justify-start px-1 font-normal text-muted-foreground"
+            onClick={() => download("modelo-workspace.json", workspace)}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            <DownloadIcon />
             Export all
-          </button>
-          <label className="import-label">
+          </Button>
+          <Label
+            className="flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-1 font-normal text-muted-foreground text-sm hover:bg-accent"
+            htmlFor="import-workspace"
+          >
+            <UploadIcon className="size-3.5" />
             Import
             <input
-              type="file"
               accept="application/json"
+              className="sr-only"
+              id="import-workspace"
               onChange={(e) =>
                 e.target.files?.[0] && importWorkspace(e.target.files[0])
               }
+              type="file"
             />
-          </label>
+          </Label>
         </div>
       </aside>
-      <main>
+      <main className="min-w-0">
         {openNotebook ? (
           <>
-            <header className="notebook-header">
-              <input
+            <header className="mx-auto flex max-w-[900px] items-center gap-3 px-6 pt-6 pb-2 md:px-[52px]">
+              <Input
                 aria-label="Notebook title"
-                value={openNotebook.title}
+                className="h-8 flex-1 border-transparent bg-transparent px-1 font-semibold shadow-none"
                 onChange={(e) =>
                   adapter.workspace.rename({
                     id: openNotebook.id,
                     name: e.target.value,
                   })
                 }
+                value={openNotebook.title}
               />
-              <button
+              <Button
                 onClick={() =>
                   download(`${openNotebook.title}.json`, openNotebook)
                 }
+                size="sm"
+                type="button"
+                variant="outline"
               >
+                <DownloadIcon />
                 Export
-              </button>
+              </Button>
             </header>
-            <div className="scenario-row" aria-label="Scenarios">
-              {(openNotebook.scenarios ?? []).map((scenario) => (
-                <span
-                  className={`scenario-chip ${activeScenario === scenario.name ? "active" : ""}`}
-                  key={scenario.id}
-                >
-                  <button
-                    className="scenario-apply"
-                    aria-pressed={activeScenario === scenario.name}
-                    onClick={() =>
-                      adapter.notebook?.applyScenario({ name: scenario.name })
-                    }
+            <div
+              aria-label="Scenarios"
+              className="mx-auto flex max-w-[900px] items-center gap-2 overflow-x-auto px-6 pb-3 md:px-[52px]"
+            >
+              {(openNotebook.scenarios ?? []).map((scenario) => {
+                const active = activeScenario === scenario.name;
+                return (
+                  <span
+                    className={`inline-flex shrink-0 items-center rounded-full border ${
+                      active ? "border-primary bg-accent" : "bg-muted/60"
+                    }`}
+                    key={scenario.id}
                   >
-                    {scenario.name}
-                  </button>
-                  <button
-                    className="scenario-delete"
-                    aria-label={`Delete scenario ${scenario.name}`}
-                    onClick={() => deleteSavedScenario(scenario.name)}
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-              <button className="scenario-save" onClick={saveCurrentScenario}>
+                    <button
+                      aria-pressed={active}
+                      className="py-1 pr-1 pl-3 text-[13px]"
+                      onClick={() =>
+                        adapter.notebook?.applyScenario({ name: scenario.name })
+                      }
+                      type="button"
+                    >
+                      {scenario.name}
+                    </button>
+                    <button
+                      aria-label={`Delete scenario ${scenario.name}`}
+                      className="py-1 pr-2.5 pl-1 text-muted-foreground"
+                      onClick={() =>
+                        setPendingDelete({ kind: "scenario", name: scenario.name })
+                      }
+                      type="button"
+                    >
+                      <XIcon className="size-3" />
+                    </button>
+                  </span>
+                );
+              })}
+              <Button
+                className="shrink-0 text-muted-foreground"
+                onClick={() => setScenarioDialogOpen(true)}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
                 + Save current as…
-              </button>
+              </Button>
             </div>
             <NotebookEditor
+              expose={expose}
               key={openNotebook.id}
               notebook={openNotebook}
-              workspace={workspace}
               onSave={saveOpenDocument}
-              expose={expose}
+              workspace={workspace}
             />
           </>
         ) : (
-          <section className="workspace-home">
-            <p className="eyebrow">Workspace</p>
-            <h1>Notebook and model, together.</h1>
-            <p>
+          <section className="mx-auto max-w-[680px] px-9 py-[17vh]">
+            <p className="font-bold text-[11px] uppercase tracking-[0.12em]">
+              Workspace
+            </p>
+            <h1 className="my-2 font-semibold text-4xl tracking-[-0.035em]">
+              Notebook and model, together.
+            </h1>
+            <p className="text-muted-foreground leading-relaxed">
               Open a notebook from the left, or create a blank one. Your
               workspace stays in this browser.
             </p>
-            <button className="primary" onClick={createNotebook}>
+            <Button className="mt-4" onClick={createNotebook} type="button">
               New notebook
-            </button>
+            </Button>
           </section>
         )}
       </main>
+
+      <Dialog onOpenChange={setScenarioDialogOpen} open={scenarioDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Save scenario</DialogTitle>
+            <DialogDescription>
+              Store the current input values under a name you can return to.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="scenario-name">Scenario name</Label>
+            <Input
+              autoFocus
+              id="scenario-name"
+              onChange={(e) => setScenarioName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && saveCurrentScenario()}
+              placeholder="Best case"
+              value={scenarioName}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={() => setScenarioDialogOpen(false)}
+              type="button"
+              variant="outline"
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={!scenarioName.trim()}
+              onClick={saveCurrentScenario}
+              type="button"
+            >
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        open={pendingDelete !== null}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingDelete?.kind === "notebook"
+                ? `Delete '${pendingDelete.title}'?`
+                : `Delete scenario '${pendingDelete?.name}'?`}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This cannot be undone. Export first if you want to keep a copy.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (pendingDelete?.kind === "notebook") {
+                  adapter.workspace.delete({ id: pendingDelete.id });
+                } else if (pendingDelete?.kind === "scenario") {
+                  adapter.notebook?.deleteScenario({ name: pendingDelete.name });
+                }
+                setPendingDelete(null);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Toaster position="bottom-right" />
     </div>
   );
 }

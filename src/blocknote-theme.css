@@ -1,0 +1,30 @@
+/*
+ * BlockNote paints its own editor surface, so it cannot be styled with utility
+ * classes from the outside. These rules bind its theme variables and gutters to
+ * the shadcn design tokens. Everything else in the app is Tailwind.
+ */
+
+.bn-container .bn-editor {
+  padding-inline: 52px;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.bn-root[data-color-scheme] {
+  --bn-colors-editor-text: var(--foreground);
+  --bn-colors-editor-background: var(--background);
+  --bn-colors-menu-text: var(--popover-foreground);
+  --bn-colors-menu-background: var(--popover);
+  --bn-colors-hovered-text: var(--accent-foreground);
+  --bn-colors-hovered-background: var(--accent);
+  --bn-colors-selected-text: var(--primary-foreground);
+  --bn-colors-selected-background: var(--primary);
+  --bn-colors-border: var(--border);
+  --bn-font-family: var(--font-sans);
+}
+
+@media (max-width: 700px) {
+  .bn-container .bn-editor {
+    padding-inline: 22px;
+  }
+}

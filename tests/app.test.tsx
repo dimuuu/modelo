@@ -21,7 +21,7 @@ describe("Modelo app smoke", () => {
 
   it("opens a newly created empty notebook", async () => {
     render(<App />);
-    fireEvent.click(screen.getByText("+ New notebook"));
+    fireEvent.click(screen.getByRole("button", { name: "New notebook" }));
     expect(await screen.findByDisplayValue("Untitled notebook")).toBeTruthy();
   });
 
@@ -149,13 +149,10 @@ describe("Modelo app smoke", () => {
     render(<App />);
 
     const currency = await screen.findByLabelText("Currency code");
-    expect(currency.tagName).toBe("SELECT");
-    expect(currency).toHaveProperty("value", "NOK");
+    expect(currency.textContent).toContain("NOK");
+    fireEvent.click(currency);
     expect(
-      Array.from(
-        (currency as HTMLSelectElement).options,
-        (option) => option.value
-      )
+      (await screen.findAllByRole("option")).map((option) => option.textContent)
     ).toEqual(
       expect.arrayContaining([
         "EUR",
@@ -170,15 +167,26 @@ describe("Modelo app smoke", () => {
         "NOK",
       ])
     );
+    fireEvent.keyDown(document.activeElement ?? document.body, {
+      key: "Escape",
+    });
 
-    const unit = screen
-      .getAllByLabelText("Unit")
-      .find((element) => element.tagName === "SELECT") as HTMLSelectElement;
-    expect(unit.tagName).toBe("SELECT");
-    expect(unit.value).toBe("km");
+    const unit = await screen.findByRole("combobox", { name: "Unit" });
+    expect(unit.textContent).toContain("km");
+    fireEvent.click(unit);
+    const groups = await screen.findAllByRole("group");
     expect(
-      Array.from(unit.querySelectorAll("optgroup"), (group) => group.label)
-    ).toEqual(["Length", "Mass", "Time", "Area", "Volume"]);
+      groups.map(
+        (group) =>
+          group.querySelector('[data-slot="select-label"]')?.textContent
+      )
+    ).toEqual([
+      "Length",
+      "Mass",
+      "Time",
+      "Area",
+      "Volume",
+    ]);
   });
 
   it("does not render format controls on formula blocks", async () => {
