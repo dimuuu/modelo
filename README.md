@@ -15,7 +15,8 @@ Modelo is a local-first notebook where the story and the calculation model are t
 - A MathJS formula graph with forward references, visible parse, missing, and cycle errors, and formula rewrites on rename.
 - Named scenarios. Save the current inputs, apply a saved set, and see which one matches. Up to eight.
 - A workspace you can create, open, rename, duplicate, and delete. Everything persists in `localStorage`.
-- JSON export of one notebook or the whole workspace, and import of a Modelo workspace file.
+- Browser-style tabs. A new tab opens on home, which lists every notebook, and a notebook takes over the tab you open it from.
+- JSON export and import of one notebook. Export from the tab that has it open.
 - Native WebMCP registration. No backend and no polyfill.
 
 ## Run it
@@ -40,7 +41,7 @@ React 19, Vite, and TypeScript. BlockNote for the editor. MathJS for formulas. z
 
 ## WebMCP
 
-Use Chrome with `chrome://flags/#enable-webmcp-testing`, or ChatGPT's in-app browser. Modelo needs native `document.modelContext`. Without it the app stays fully usable and the sidebar reports "WebMCP unavailable".
+Use Chrome with `chrome://flags/#enable-webmcp-testing`, or ChatGPT's in-app browser. Modelo needs native `document.modelContext`. Without it the app stays fully usable; the tools simply do not register.
 
 Workspace tools are always registered. Notebook tools register only while a notebook is open. `src/webmcp/tools.ts` is the full list: one row per tool.
 
@@ -56,7 +57,7 @@ To build a new model, ask the agent to write a section rather than to dump varia
 
 ## Browser data
 
-Everything lives in this browser under the `modelo.workspace.v1` key. Export before you clear site data or change browser.
+Everything lives in this browser under the `modelo.workspace.v1` key. Open tabs are not stored; they last as long as the page. Export a notebook before you clear site data or change browser.
 
 ## More
 

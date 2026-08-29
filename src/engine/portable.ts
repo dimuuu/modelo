@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import type { ModeloBlock, ModeloDocument } from "../model";
 import {
+  HEADING_LEVELS,
   INPUT_BLOCK_TYPES,
   inlineRefName,
   inlineRefVarId,
@@ -35,8 +36,6 @@ import {
  * is accepted as a shorthand for `inline`. A variable block carries its
  * fields flat. Any other BlockNote block (a table, say) passes through.
  */
-
-const HEADING_LEVELS = { max: 3, min: 1 };
 
 export const inlineSchema = z.union([
   z.string(),
@@ -97,12 +96,7 @@ export const proseBlockSchema: z.ZodType<PortableProseBlock> = z.strictObject({
     return z.array(portableBlockSchema).optional();
   },
   inline: z.array(inlineSchema).optional(),
-  level: z
-    .number()
-    .int()
-    .min(HEADING_LEVELS.min)
-    .max(HEADING_LEVELS.max)
-    .optional(),
+  level: z.union(HEADING_LEVELS.map((level) => z.literal(level))).optional(),
   props: z.record(z.string(), z.unknown()).optional(),
   text: z.string().optional(),
   type: z.enum(PROSE_BLOCK_TYPES),

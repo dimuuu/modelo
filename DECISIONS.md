@@ -7,8 +7,8 @@ What the code cannot say for itself: the questions still open, the assumptions v
 - **Name and copy.** Keep "Modelo" and the one-line positioning, or change them before submission?
 - **Persistence.** v1 is browser-local on purpose. Accounts or sharing would need a backend.
 - **Units.** v1 takes a display unit and leaves conversion to a MathJS expression. Should the editor grow unit pickers?
-- **Import.** Import replaces the workspace after validation. Should it merge instead?
-- **Demo flow.** Notebook tools disappear on the workspace home. Is that the flow the demo should show?
+- **Import.** Import takes one exported notebook and adds it. Should a whole-workspace file come back?
+- **Demo flow.** Notebook tools disappear on a home tab. Is that the flow the demo should show?
 - **Domain.** Use `modelo.vercel.app`, or attach a custom domain?
 - **Dark mode.** `src/index.css` carries a full dark palette and every shadcn component honours it. Nothing toggles `.dark`, and `BlockNoteView` is pinned to `theme="light"`. Finish it, or delete the tokens?
 
@@ -20,7 +20,8 @@ What the code cannot say for itself: the questions still open, the assumptions v
 - Number, slider, and select blocks may fix 0 to 8 decimals. Without that, currency shows 0 decimals for a whole number and 2 for any other. A formula takes its format from its units.
 - Select option values are numbers. The labels carry the meaning.
 - BlockNote refuses to delete the last block. Deleting a variable leaves formula errors and `missing` chips on show.
-- Out of scope: multi-tab sync, auth, sharing, locks, AI chat, and a backend.
+- Tabs are session state. A reload opens one home tab, whatever was open before.
+- Out of scope: sync between browser windows, auth, sharing, locks, AI chat, and a backend.
 - One Vitest and happy-dom smoke test covers the UI. The engine, the tools, and the portable format are tested without a DOM.
 
 ## Why the architecture is this way
@@ -33,11 +34,13 @@ Each entry names the alternative it rejects. [CONTEXT.md](./CONTEXT.md) names th
 - **Lenient projection.** An invalid block becomes an issue on that block. A duplicate name marks the second block, not the whole document. A strict `projectDocument` remains for callers that need a clean model.
 - **The title is a block, not a field.** Every document opens with a level 1 heading, and that heading is the notebook title. The rejected alternative was a `title` field on the notebook record beside a heading in the document: two names for one thing, free to drift, and one of them invisible to the agent tools that write prose.
 - **Domain schemas live with their module.** The engine owns its rules; `src/webmcp/schemas.ts` only composes them. A tool schema that restates a rule will drift from it.
+- **Tabs, not a sidebar.** The notebook owns the viewport, and navigation is a strip of browser-style tabs over a home page. A sidebar spent width on a list a reader consults rarely, and it could show only one notebook at a time. Every open notebook now stays mounted behind its tab, so switching keeps the cursor and the scroll position.
+- **One tab per notebook.** Opening a notebook that is already open brings its tab forward. Two editors over one record would fork the document, because each one saves its own copy of the blocks.
 - **shadcn on Base UI, not Radix.** One component library covers every control. The one stylesheet left is `src/blocknote-theme.css`, because BlockNote paints its own editor surface.
 
 ## Known gaps
 
 Date each entry. Delete it when it is fixed.
 
-- **2026-08-29** — the architecture refactor has not been seen in a browser. Tests and the build pass.
+- **2026-08-29** — the architecture refactor and the tab shell have not been seen in a browser. Tests and the build pass.
 - **2026-08-29** — the production bundle is one 2.1 MB chunk. Code splitting is untouched.

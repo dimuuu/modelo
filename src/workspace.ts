@@ -11,8 +11,8 @@ import { readTitle, setTitleIn, titleBlock } from "./engine/title";
  * The workspace catalogue: which notebooks exist, and how they persist.
  *
  * Every catalogue change is a pure function from one `Workspace` to the next.
- * React state holds the current value and the id of the open notebook, and
- * nothing else.
+ * React state holds the current value, and nothing else. Which notebooks are
+ * open is the tab strip's business (`src/tabs.ts`).
  */
 
 export const STORAGE_KEY = "modelo.workspace.v1";
@@ -66,6 +66,24 @@ export function parseWorkspace(source: string | unknown): Workspace | null {
     }
   }
   const result = workspaceSchema.safeParse(value);
+  return result.success ? result.data : null;
+}
+
+/**
+ * Parses one exported notebook. Returns null when the JSON is unreadable or
+ * does not describe a notebook, so an unrelated file becomes a message rather
+ * than a crash.
+ */
+export function parseNotebook(source: string | unknown): NotebookRecord | null {
+  let value: unknown = source;
+  if (typeof source === "string") {
+    try {
+      value = JSON.parse(source);
+    } catch {
+      return null;
+    }
+  }
+  const result = notebookRecordSchema.safeParse(value);
   return result.success ? result.data : null;
 }
 
@@ -126,6 +144,19 @@ export function createNotebook(
     scenarios: [],
     updatedAt: now(),
   };
+  return {
+    notebook,
+    workspace: { ...workspace, notebooks: [...workspace.notebooks, notebook] },
+  };
+}
+
+/** Adds an imported notebook under a fresh id, so it cannot collide. */
+export function importNotebook(
+  workspace: Workspace,
+  record: NotebookRecord,
+  id: string
+): { workspace: Workspace; notebook: NotebookRecord } {
+  const notebook: NotebookRecord = { ...clone(record), id, updatedAt: now() };
   return {
     notebook,
     workspace: { ...workspace, notebooks: [...workspace.notebooks, notebook] },

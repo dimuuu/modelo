@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import type { ModeloBlock, ProjectedModel } from "../model";
-import { isProseBlockType } from "./document";
+import { HEADING_LEVELS, isProseBlockType } from "./document";
 import { currencySchema, unitSchema } from "./section";
 import {
   clampSliderValue,
@@ -25,7 +25,6 @@ import {
  * reason it cannot.
  */
 
-const HEADING_LEVELS = [1, 2, 3] as const;
 const headingLevel = z.union(HEADING_LEVELS.map((level) => z.literal(level)));
 const blockId = z.string().min(1);
 

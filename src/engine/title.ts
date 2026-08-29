@@ -5,8 +5,8 @@ import type { PortableBlock, PortableProseBlock } from "./portable";
  * The notebook title lives in the document.
  *
  * Every notebook starts with a level 1 heading, and that heading is the
- * title. There is no separate title field to drift from it: the sidebar, the
- * export filename, and `list_notebooks` all read this one block.
+ * title. There is no separate title field to drift from it: the tab label,
+ * the export filename, and `list_notebooks` all read this one block.
  *
  * The helpers below read both dialects. A portable heading carries `level`;
  * an editor heading carries `props.level`.

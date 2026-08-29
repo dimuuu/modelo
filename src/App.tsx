@@ -1,10 +1,3 @@
-import {
-  CopyIcon,
-  DownloadIcon,
-  PlusIcon,
-  UploadIcon,
-  XIcon,
-} from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -18,7 +11,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -30,42 +22,40 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { Toaster } from "@/components/ui/sonner";
 
 import "@blocknote/mantine/style.css";
-import { toEditorBlocks } from "./engine/portable";
 import type { PortableBlock } from "./engine/portable";
-import { matchingScenarioName } from "./engine/scenarios";
+import { HomeTab } from "./HomeTab";
 import type { EditorPort } from "./notebook/port";
-import { NotebookEditor } from "./NotebookEditor";
-import { EMPTY_TOOLS_STATE, ModeloTools } from "./webmcp/ModeloTools";
-import type { ModeloToolsState } from "./webmcp/ModeloTools";
+import { NotebookTab } from "./NotebookTab";
+import {
+  activateTab,
+  closeTab,
+  goHome,
+  initialTabs,
+  newTab,
+  openInTab,
+  openNotebookId,
+  pruneTabs,
+} from "./tabs";
+import type { TabState } from "./tabs";
+import { TabStrip } from "./TabStrip";
+import { ModeloTools } from "./webmcp/ModeloTools";
 import { findTool, runTool } from "./webmcp/tools";
 import type { ToolRuntime } from "./webmcp/tools";
 import {
   findNotebook,
+  importNotebook,
   loadWorkspace,
   notebookTitle,
-  parseWorkspace,
+  parseNotebook,
   replaceNotebookBlocks,
   saveWorkspace,
 } from "./workspace";
-import type { Workspace } from "./workspace";
+import type { NotebookRecord, Workspace } from "./workspace";
 
 import "./blocknote-theme.css";
-
-function download(filename: string, value: unknown) {
-  const url = URL.createObjectURL(
-    new Blob([JSON.stringify(value, null, 2)], { type: "application/json" })
-  );
-  const anchor = Object.assign(document.createElement("a"), {
-    download: filename,
-    href: url,
-  });
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
 
 type PendingDelete =
   | { kind: "notebook"; id: string; title: string }
@@ -73,26 +63,25 @@ type PendingDelete =
 
 /**
  * The shell. It owns two pieces of state the tools cannot: the workspace
- * catalogue and which notebook is open. Everything the sidebar and the header
- * do goes through the same tool table the agent uses.
+ * catalogue and the tab strip. Everything the tabs and the home page do goes
+ * through the same tool table the agent uses.
+ *
+ * Every open notebook stays mounted, hidden until its tab comes forward, so
+ * switching tabs keeps the cursor and the scroll position. `ports` holds one
+ * editor per notebook; the tools always get the one in front.
  */
 export default function App() {
   const [workspace, setWorkspace] = useState<Workspace>(() => loadWorkspace());
-  const [openId, setOpenId] = useState<string | null>(
-    () => workspace.notebooks[0]?.id ?? null
-  );
-  const [webmcp, setWebmcp] = useState<ModeloToolsState>(EMPTY_TOOLS_STATE);
+  const [tabState, setTabState] = useState<TabState>(initialTabs);
   const [scenarioDialogOpen, setScenarioDialogOpen] = useState(false);
   const [scenarioName, setScenarioName] = useState("");
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(
     null
   );
 
-  const editorRef = useRef<EditorPort | null>(null);
+  const ports = useRef(new Map<string, EditorPort>());
   const workspaceRef = useRef(workspace);
-  const openIdRef = useRef(openId);
-
-  const openNotebook = findNotebook(workspace, openId) ?? null;
+  const tabsRef = useRef(tabState);
 
   // First run: the seeds are copied into storage once, so a deleted seed never
   // returns on the next load.
@@ -111,18 +100,39 @@ export default function App() {
     },
     []
   );
-  const open = useCallback((id: string | null) => {
-    openIdRef.current = id;
-    setOpenId(id);
+
+  const setTabs = useCallback((next: TabState) => {
+    if (next !== tabsRef.current) {
+      tabsRef.current = next;
+      setTabState(next);
+    }
   }, []);
+
+  const open = useCallback(
+    (id: string | null) => {
+      setTabs(
+        id === null ? goHome(tabsRef.current) : openInTab(tabsRef.current, id)
+      );
+    },
+    [setTabs]
+  );
+
+  // A deleted notebook takes its tab with it, whoever deleted it.
+  const { notebooks } = workspace;
+  useEffect(() => {
+    setTabs(pruneTabs(tabsRef.current, new Set(notebooks.map(({ id }) => id))));
+  }, [notebooks, setTabs]);
 
   const runtime = useMemo<ToolRuntime>(
     () => ({
-      editor: () => editorRef.current,
+      editor: () => {
+        const id = openNotebookId(tabsRef.current);
+        return (id ? ports.current.get(id) : undefined) ?? null;
+      },
       workspace: {
         current: () => workspaceRef.current,
         open,
-        openId: () => openIdRef.current,
+        openId: () => openNotebookId(tabsRef.current),
         update: updateWorkspace,
       },
     }),
@@ -141,22 +151,23 @@ export default function App() {
     [runtime]
   );
 
-  const saveOpenDocument = useCallback(
-    (blocks: PortableBlock[]) => {
-      const id = openIdRef.current;
-      if (id) {
-        updateWorkspace((current) =>
-          replaceNotebookBlocks(current, id, blocks)
-        );
-      }
+  const saveNotebook = useCallback(
+    (id: string, blocks: PortableBlock[]) => {
+      updateWorkspace((current) => replaceNotebookBlocks(current, id, blocks));
     },
     [updateWorkspace]
   );
-  const expose = useCallback((port: EditorPort | null) => {
-    editorRef.current = port;
+
+  const registerPort = useCallback((id: string, port: EditorPort | null) => {
+    if (port) {
+      ports.current.set(id, port);
+    } else {
+      ports.current.delete(id);
+    }
   }, []);
 
-  const importWorkspace = async (file: File) => {
+  /** Imports one exported notebook and opens it. */
+  const importFile = async (file: File) => {
     let text: string;
     try {
       text = await file.text();
@@ -164,14 +175,20 @@ export default function App() {
       toast.error("Could not read the file.");
       return;
     }
-    const imported = parseWorkspace(text);
-    if (!imported) {
-      toast.error("Not a Modelo workspace export");
+    const record = parseNotebook(text);
+    if (!record) {
+      toast.error("Not a Modelo notebook export");
       return;
     }
-    updateWorkspace(() => imported);
-    open(imported.notebooks[0]?.id ?? null);
-    toast.success(`Imported ${imported.notebooks.length} notebooks.`);
+    let added: NotebookRecord | undefined;
+    updateWorkspace((current) => {
+      const result = importNotebook(current, record, crypto.randomUUID());
+      added = result.notebook;
+      return result.workspace;
+    });
+    const notebook = added as NotebookRecord;
+    open(notebook.id);
+    toast.success(`Imported '${notebookTitle(notebook)}'.`);
   };
 
   const defaults = useMemo(
@@ -179,17 +196,12 @@ export default function App() {
     [workspace.currency, workspace.locale]
   );
 
-  // Derived from the persisted snapshot, which changes on every edit, so the
-  // chips follow the document without reading the editor during render.
-  const activeScenario = useMemo(
-    () =>
-      openNotebook
-        ? matchingScenarioName(
-            toEditorBlocks(openNotebook.blocks),
-            openNotebook.scenarios
-          )
-        : null,
-    [openNotebook]
+  const titleOf = useCallback(
+    (notebookId: string | null) => {
+      const notebook = findNotebook(workspace, notebookId);
+      return notebook ? notebookTitle(notebook) : "Home";
+    },
+    [workspace]
   );
 
   const saveCurrentScenario = async () => {
@@ -215,218 +227,63 @@ export default function App() {
   };
 
   return (
-    <div className="grid min-h-screen grid-cols-1 md:grid-cols-[250px_minmax(0,1fr)]">
+    <div className="flex h-dvh flex-col">
       <ModeloTools
-        notebookOpen={openId !== null}
-        onChange={setWebmcp}
+        notebookOpen={openNotebookId(tabState) !== null}
         runtime={runtime}
       />
-      <aside className="bg-sidebar flex max-h-[42vh] flex-col gap-3 border-b p-3 md:sticky md:top-0 md:h-screen md:max-h-none md:border-r md:border-b-0">
-        <Button
-          className="justify-start px-2 text-[19px] font-bold tracking-tight"
-          onClick={() => open(null)}
-          size="lg"
-          type="button"
-          variant="ghost"
-        >
-          Modelo
-        </Button>
-        <Button
-          className="justify-start"
-          onClick={() => run("create_notebook", { name: "Untitled notebook" })}
-          type="button"
-        >
-          <PlusIcon />
-          New notebook
-        </Button>
-        <nav className="-mx-1 flex flex-col gap-0.5 overflow-y-auto px-1">
-          {workspace.notebooks.map((notebook) => {
-            const title = notebookTitle(notebook);
-            return (
-              <div
-                className={`group grid grid-cols-[minmax(0,1fr)_auto_auto] items-center rounded-md ${
-                  notebook.id === openId ? "bg-sidebar-accent" : ""
-                }`}
-                key={notebook.id}
-              >
-                <Button
-                  className="justify-start truncate px-2 font-normal"
-                  onClick={() => open(notebook.id)}
-                  size="sm"
-                  type="button"
-                  variant="ghost"
-                >
-                  <span className="truncate">{title}</span>
-                </Button>
-                <Button
-                  aria-label={`Duplicate ${title}`}
-                  className="text-muted-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-                  onClick={() => run("duplicate_notebook", { id: notebook.id })}
-                  size="icon-sm"
-                  title="Duplicate"
-                  type="button"
-                  variant="ghost"
-                >
-                  <CopyIcon />
-                </Button>
-                <Button
-                  aria-label={`Delete ${title}`}
-                  className="text-muted-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-                  onClick={() =>
+      <TabStrip
+        onActivate={(tabId) => setTabs(activateTab(tabsRef.current, tabId))}
+        onClose={(tabId) => setTabs(closeTab(tabsRef.current, tabId))}
+        onNewTab={() => setTabs(newTab(tabsRef.current))}
+        state={tabState}
+        titleOf={titleOf}
+      />
+      <main className="min-h-0 flex-1">
+        {tabState.tabs.map((tab) => {
+          const notebook = findNotebook(workspace, tab.notebookId);
+          return (
+            <div
+              className={
+                tab.id === tabState.activeId
+                  ? "h-full overflow-y-auto"
+                  : "hidden"
+              }
+              key={tab.id}
+            >
+              {notebook ? (
+                <NotebookTab
+                  defaults={defaults}
+                  notebook={notebook}
+                  onApplyScenario={(name) => run("apply_scenario", { name })}
+                  onDeleteScenario={(name) =>
+                    setPendingDelete({ kind: "scenario", name })
+                  }
+                  onSave={saveNotebook}
+                  onSaveScenario={() => setScenarioDialogOpen(true)}
+                  registerPort={registerPort}
+                />
+              ) : (
+                <HomeTab
+                  onCreate={() =>
+                    run("create_notebook", { name: "Untitled notebook" })
+                  }
+                  onDelete={(record) =>
                     setPendingDelete({
-                      id: notebook.id,
+                      id: record.id,
                       kind: "notebook",
-                      title,
+                      title: notebookTitle(record),
                     })
                   }
-                  size="icon-sm"
-                  title="Delete"
-                  type="button"
-                  variant="ghost"
-                >
-                  <XIcon />
-                </Button>
-              </div>
-            );
-          })}
-        </nav>
-        <div className="mt-auto hidden flex-col gap-1 md:flex">
-          <Separator className="mb-2" />
-          <Badge
-            className="w-fit gap-1.5 font-normal"
-            variant={webmcp.supported ? "default" : "secondary"}
-          >
-            <span
-              className={`size-1.5 rounded-full ${
-                webmcp.supported ? "bg-current" : "bg-muted-foreground"
-              }`}
-            />
-            {webmcp.supported ? "WebMCP ready" : "WebMCP unavailable"}
-          </Badge>
-          <Button
-            className="text-muted-foreground justify-start px-1 font-normal"
-            onClick={() => download("modelo-workspace.json", workspace)}
-            size="sm"
-            type="button"
-            variant="ghost"
-          >
-            <DownloadIcon />
-            Export all
-          </Button>
-          <Label
-            className="text-muted-foreground hover:bg-accent flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-1 text-sm font-normal"
-            htmlFor="import-workspace"
-          >
-            <UploadIcon className="size-3.5" />
-            Import
-            <input
-              accept="application/json"
-              className="sr-only"
-              id="import-workspace"
-              onChange={(e) =>
-                e.target.files?.[0] && importWorkspace(e.target.files[0])
-              }
-              type="file"
-            />
-          </Label>
-        </div>
-      </aside>
-      <main className="min-w-0">
-        {openNotebook ? (
-          <>
-            <header className="mx-auto flex max-w-[900px] justify-end px-6 pt-6 pb-2 md:px-[52px]">
-              <Button
-                onClick={() =>
-                  download(`${notebookTitle(openNotebook)}.json`, openNotebook)
-                }
-                size="sm"
-                type="button"
-                variant="outline"
-              >
-                <DownloadIcon />
-                Export
-              </Button>
-            </header>
-            <div
-              aria-label="Scenarios"
-              className="mx-auto flex max-w-[900px] items-center gap-2 overflow-x-auto px-6 pb-3 md:px-[52px]"
-            >
-              {openNotebook.scenarios.map((scenario) => {
-                const active = activeScenario === scenario.name;
-                return (
-                  <span
-                    className={`inline-flex shrink-0 items-center rounded-full border ${
-                      active ? "border-primary bg-accent" : "bg-muted/60"
-                    }`}
-                    key={scenario.id}
-                  >
-                    <button
-                      aria-pressed={active}
-                      className="py-1 pr-1 pl-3 text-[13px]"
-                      onClick={() =>
-                        run("apply_scenario", { name: scenario.name })
-                      }
-                      type="button"
-                    >
-                      {scenario.name}
-                    </button>
-                    <button
-                      aria-label={`Delete scenario ${scenario.name}`}
-                      className="text-muted-foreground py-1 pr-2.5 pl-1"
-                      onClick={() =>
-                        setPendingDelete({
-                          kind: "scenario",
-                          name: scenario.name,
-                        })
-                      }
-                      type="button"
-                    >
-                      <XIcon className="size-3" />
-                    </button>
-                  </span>
-                );
-              })}
-              <Button
-                className="text-muted-foreground shrink-0"
-                onClick={() => setScenarioDialogOpen(true)}
-                size="sm"
-                type="button"
-                variant="ghost"
-              >
-                + Save current as…
-              </Button>
+                  onDuplicate={(id) => run("duplicate_notebook", { id })}
+                  onImport={importFile}
+                  onOpen={(id) => run("open_notebook", { id })}
+                  workspace={workspace}
+                />
+              )}
             </div>
-            <NotebookEditor
-              defaults={defaults}
-              expose={expose}
-              key={openNotebook.id}
-              notebook={openNotebook}
-              onSave={saveOpenDocument}
-            />
-          </>
-        ) : (
-          <section className="mx-auto max-w-[680px] px-9 py-[17vh]">
-            <p className="text-[11px] font-bold tracking-[0.12em] uppercase">
-              Workspace
-            </p>
-            <h1 className="my-2 text-4xl font-semibold tracking-[-0.035em]">
-              Notebook and model, together.
-            </h1>
-            <p className="text-muted-foreground leading-relaxed">
-              Open a notebook from the left, or create a blank one. Your
-              workspace stays in this browser.
-            </p>
-            <Button
-              className="mt-4"
-              onClick={() =>
-                run("create_notebook", { name: "Untitled notebook" })
-              }
-              type="button"
-            >
-              New notebook
-            </Button>
-          </section>
-        )}
+          );
+        })}
       </main>
 
       <Dialog onOpenChange={setScenarioDialogOpen} open={scenarioDialogOpen}>

@@ -38,6 +38,12 @@ These are the names the code uses. Use them in modules, in tests, in docs, and i
 - **Tool runtime** — what the app hands the tools: the workspace store and the open notebook's editor port.
 - **Tool error** — a failure with a stable code (`ModeloToolError`, `src/notebook/errors.ts`), serialised as `{ ok: false, error: { code, message, details? } }`.
 
+## The shell
+
+- **Tab** — one slot in the tab strip. It shows one notebook, or **home** when its `notebookId` is null. A notebook is open in at most one tab, so its editor and its saved blocks never fork. Every change is a pure reducer in `src/tabs.ts`.
+- **Home** — what a new tab shows: the catalogue of notebooks, the new notebook button, and the import button (`src/HomeTab.tsx`). There is no notebook open, so notebook tools stay unregistered.
+- **Open notebook** — the notebook in the tab that is in front. It is the one the tools act on.
+
 ## Workspace
 
 - **Workspace** — the catalogue of notebook records plus the display defaults, currency and locale. It persists under one `localStorage` key. Every change is a pure reducer in `src/workspace.ts`.

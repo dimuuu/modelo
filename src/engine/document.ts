@@ -28,6 +28,10 @@ export const PROSE_BLOCK_TYPES = [
 ] as const;
 export type ProseBlockType = (typeof PROSE_BLOCK_TYPES)[number];
 
+/** The heading levels a notebook may hold. The editor and the tools share them. */
+export const HEADING_LEVELS = [1, 2, 3] as const;
+export type HeadingLevel = (typeof HEADING_LEVELS)[number];
+
 const inputTypes = new Set<string>(INPUT_BLOCK_TYPES);
 const proseTypes = new Set<string>(PROSE_BLOCK_TYPES);
 

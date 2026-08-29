@@ -1,7 +1,9 @@
 import {
   BlockNoteSchema,
+  createHeadingBlockSpec,
   defaultBlockSpecs,
   defaultInlineContentSpecs,
+  defaultStyleSpecs,
 } from "@blocknote/core";
 import {
   createReactBlockSpec,
@@ -28,6 +30,7 @@ import {
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 
+import { HEADING_LEVELS } from "./engine/document";
 import { CURRENCIES, UNIT_GROUPS, UNITS } from "./engine/units";
 import {
   clampSliderValue,
@@ -704,11 +707,38 @@ const VariableRef = createReactInlineContentSpec(
   }
 );
 
+/**
+ * What Modelo removes from BlockNote's defaults.
+ *
+ * A notebook holds prose and a model, not media, so the four file blocks go.
+ * The toggle list and the toggleable heading go with them, and so do the two
+ * colour styles. What cannot leave the schema leaves the menus instead
+ * (`editor-menus.tsx`): every default block carries text alignment and block
+ * colour, and nesting is structural.
+ */
+const {
+  audio: _audio,
+  file: _file,
+  image: _image,
+  toggleListItem: _toggleListItem,
+  video: _video,
+  ...keptBlockSpecs
+} = defaultBlockSpecs;
+const {
+  backgroundColor: _backgroundColor,
+  textColor: _textColor,
+  ...keptStyleSpecs
+} = defaultStyleSpecs;
+
 export const modeloSchema = BlockNoteSchema.create({
   blockSpecs: {
-    ...defaultBlockSpecs,
+    ...keptBlockSpecs,
     boolean: BooleanBlock(),
     formula: FormulaBlock(),
+    heading: createHeadingBlockSpec({
+      allowToggleHeadings: false,
+      levels: HEADING_LEVELS,
+    }),
     number: NumberBlock(),
     select: SelectBlock(),
     slider: SliderBlock(),
@@ -717,5 +747,6 @@ export const modeloSchema = BlockNoteSchema.create({
     ...defaultInlineContentSpecs,
     variableRef: VariableRef,
   },
+  styleSpecs: keptStyleSpecs,
 });
 export type ModeloEditor = typeof modeloSchema.BlockNoteEditor;

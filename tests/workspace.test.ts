@@ -6,8 +6,10 @@ import {
   createNotebook,
   deleteNotebook,
   duplicateNotebook,
+  importNotebook,
   loadWorkspace,
   notebookTitle,
+  parseNotebook,
   renameNotebook,
   replaceNotebookBlocks,
   saveWorkspace,
@@ -15,6 +17,7 @@ import {
   setNotebookScenarios,
   STORAGE_KEY,
 } from "../src/workspace";
+import type { NotebookRecord } from "../src/workspace";
 
 describe("workspace persistence", () => {
   it("copies three seeds only on first run", () => {
@@ -148,5 +151,31 @@ describe("workspace reducers", () => {
     ]);
     expect(withScenarios.notebooks[1].scenarios).toHaveLength(1);
     expect(withScenarios.notebooks[0].scenarios).toEqual([]);
+  });
+});
+
+describe("importing one notebook", () => {
+  it("rejects a file that is not a notebook export", () => {
+    expect(parseNotebook("not json")).toBeNull();
+    expect(parseNotebook(JSON.stringify({ version: 1 }))).toBeNull();
+  });
+
+  it("adds an imported notebook under a fresh id", () => {
+    const base = seededWorkspace();
+    const [source] = base.notebooks;
+    const exported = JSON.parse(JSON.stringify(source));
+    const record = parseNotebook(JSON.stringify(exported));
+    expect(record).not.toBeNull();
+
+    const { workspace, notebook } = importNotebook(
+      base,
+      record as NotebookRecord,
+      "fresh"
+    );
+    expect(workspace.notebooks).toHaveLength(base.notebooks.length + 1);
+    expect(notebook.id).toBe("fresh");
+    // A re-import must not overwrite the notebook it came from.
+    expect(notebookTitle(notebook)).toBe(notebookTitle(source));
+    expect(workspace.notebooks[0]).toBe(source);
   });
 });

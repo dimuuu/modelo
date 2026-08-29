@@ -1,5 +1,7 @@
 import { BlockNoteView } from "@blocknote/mantine";
 import {
+  FormattingToolbarController,
+  SideMenuController,
   SuggestionMenuController,
   getDefaultReactSlashMenuItems,
   useCreateBlockNote,
@@ -7,6 +9,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ModelProvider, modeloSchema } from "./editor";
+import { ModeloFormattingToolbar, ModeloSideMenu } from "./editor-menus";
 import type { VariableBlockType } from "./engine/document";
 import type { FormatDefaults } from "./engine/format";
 import { describeNotebook } from "./engine/notebook";
@@ -124,6 +127,8 @@ export function NotebookEditor({
         <BlockNoteView
           editor={editor}
           theme="light"
+          formattingToolbar={false}
+          sideMenu={false}
           slashMenu={false}
           onChange={() => {
             // Typing can delete the title heading; put it back before anyone
@@ -135,6 +140,10 @@ export function NotebookEditor({
             onSave(fromEditorBlocks(next));
           }}
         >
+          <FormattingToolbarController
+            formattingToolbar={ModeloFormattingToolbar}
+          />
+          <SideMenuController sideMenu={ModeloSideMenu} />
           <SuggestionMenuController
             triggerCharacter="/"
             getItems={slashItems}
