@@ -9,7 +9,7 @@ import {
   createReactBlockSpec,
   createReactInlineContentSpec,
 } from "@blocknote/react";
-import { XIcon } from "lucide-react";
+import { InfoIcon, XIcon } from "lucide-react";
 import { createContext, useContext, useId } from "react";
 import { toast } from "sonner";
 
@@ -29,6 +29,12 @@ import {
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 import { HEADING_LEVELS } from "./engine/document";
 import { CURRENCIES, UNIT_GROUPS, UNITS } from "./engine/units";
@@ -128,7 +134,7 @@ function Field({
   );
 }
 
-/** What a model block shows: the evaluated value, or the raw prop until then. */
+/** What a model block shows when the variable evaluated. */
 function renderValue(
   variable: EvaluationResult["byId"][string] | undefined,
   fallback: number | undefined,
@@ -143,6 +149,37 @@ function renderValue(
   return variable?.formatted ?? fallback ?? "missing";
 }
 
+/** The one-word label a failure shows. The reason goes in the tooltip. */
+const FAILURE_LABELS = { error: "Error", missing: "Missing" } as const;
+
+/**
+ * A failed variable, in the width of a word. The block stays readable, and
+ * the reason is one hover away.
+ */
+function Failure({
+  status,
+  detail,
+}: {
+  status: "error" | "missing";
+  detail: string;
+}) {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger
+          aria-label={detail}
+          className="text-destructive flex shrink-0 cursor-help items-center gap-1 bg-transparent text-sm font-semibold whitespace-nowrap"
+          type="button"
+        >
+          {FAILURE_LABELS[status]}
+          <InfoIcon aria-hidden="true" className="size-3.5" />
+        </TooltipTrigger>
+        <TooltipContent>{detail}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
 function Value({
   varId,
   fallback,
@@ -154,25 +191,31 @@ function Value({
 }) {
   const model = useContext(ModelContext);
   const variable = model?.byId[varId];
-  const rendered = renderValue(variable, fallback, boolean);
-  const failed = variable?.status === "error" || variable?.status === "missing";
+  if (variable?.status === "error" || variable?.status === "missing") {
+    return (
+      <Failure
+        detail={variable.error ?? variable.formatted}
+        status={variable.status}
+      />
+    );
+  }
   return (
-    <span
-      className={`shrink-0 text-sm font-semibold whitespace-nowrap tabular-nums ${
-        failed ? "text-destructive" : "text-foreground"
-      }`}
-    >
-      {rendered}
+    <span className="text-foreground shrink-0 text-sm font-semibold whitespace-nowrap tabular-nums">
+      {renderValue(variable, fallback, boolean)}
     </span>
   );
 }
 
 /** The editable variable name: the only caption a model block has. */
-function VariableName({ block, editor }: ModelBlockFields) {
+function VariableName({
+  block,
+  editor,
+  className = "-mx-1.5 w-56",
+}: ModelBlockFields & { className?: string }) {
   return (
     <Input
       aria-label="Variable name"
-      className="-mx-1.5 h-7 w-56 border-transparent bg-transparent px-1.5 font-mono text-[13px] font-semibold shadow-none"
+      className={`h-7 border-transparent bg-transparent px-1.5 font-mono text-[13px] font-semibold shadow-none ${className}`}
       defaultValue={block.props.name}
       onBlur={(event) => {
         const nextName = event.currentTarget.value.trim();
@@ -394,7 +437,11 @@ function SliderFields({ block, editor }: ModelBlockFields) {
   );
 }
 
-function SelectOptions({ block, editor }: ModelBlockFields) {
+/**
+ * The option list of a select block. It lives in the six-dot menu, not in the
+ * block, so the block shows only the name, the choice, and the value.
+ */
+export function SelectOptions({ block, editor }: ModelBlockFields) {
   const options = parseSelectOptions(block.props.options);
   const save = (next: SelectOption[]) => {
     const safe = next.length ? next : [{ label: "Option", value: 0 }];
@@ -413,10 +460,10 @@ function SelectOptions({ block, editor }: ModelBlockFields) {
       )
     );
   return (
-    <div
-      aria-label="Select options"
-      className="flex flex-col gap-1.5 border-t pt-3"
-    >
+    <div aria-label="Select options" className="flex w-72 flex-col gap-1.5 p-2">
+      <p className="text-muted-foreground px-0.5 text-[10px] font-medium tracking-wide uppercase">
+        Options
+      </p>
       {options.map((option, index) => (
         <div
           className="grid grid-cols-[minmax(0,1fr)_6rem_auto] gap-1.5"
@@ -472,19 +519,9 @@ function SelectOptions({ block, editor }: ModelBlockFields) {
 }
 
 /** The shared frame every model block renders inside. */
-function ModelBlock({
-  accent = false,
-  children,
-}: {
-  accent?: boolean;
-  children: React.ReactNode;
-}) {
+function ModelBlock({ children }: { children: React.ReactNode }) {
   return (
-    <Card
-      className={`bg-card my-1.5 gap-3 rounded-lg px-4 py-3 shadow-none ${
-        accent ? "border-l-primary border-l-2" : ""
-      }`}
-    >
+    <Card className="modelo-block bg-card my-1.5 gap-3 rounded-lg px-4 py-3 shadow-none">
       {children}
     </Card>
   );
@@ -612,7 +649,6 @@ const SelectBlock = createReactBlockSpec(
             </Select>
             <Value fallback={block.props.value} varId={block.props.varId} />
           </div>
-          <SelectOptions block={block} editor={editor} />
         </ModelBlock>
       );
     },
@@ -644,6 +680,18 @@ const BooleanBlock = createReactBlockSpec(
   }
 );
 
+/** The `=` sign that separates the name, the formula, and the result. */
+function Equals() {
+  return (
+    <span
+      aria-hidden="true"
+      className="text-muted-foreground shrink-0 font-mono text-[13px]"
+    >
+      =
+    </span>
+  );
+}
+
 const FormulaBlock = createReactBlockSpec(
   {
     content: "none",
@@ -656,18 +704,26 @@ const FormulaBlock = createReactBlockSpec(
   },
   {
     render: ({ block, editor }) => (
-      <ModelBlock accent>
-        <VariableName block={block} editor={editor} />
-        <div className="flex items-center gap-3">
+      <ModelBlock>
+        <div className="flex w-full items-center gap-2">
+          <VariableName
+            block={block}
+            className="field-sizing-content max-w-56 min-w-24 shrink-0"
+            editor={editor}
+          />
+          <Equals />
           <Input
             aria-label={`${block.props.name} expression`}
-            className="font-mono text-[13px]"
+            className="field-sizing-content h-7 max-w-full min-w-32 font-mono text-[13px]"
             onChange={(e) =>
               updateProps(editor, block, { formula: e.target.value })
             }
             value={block.props.formula}
           />
-          <Value varId={block.props.varId} />
+          <div className="ml-auto flex shrink-0 items-center gap-2 pl-2">
+            <Equals />
+            <Value varId={block.props.varId} />
+          </div>
         </div>
       </ModelBlock>
     ),
@@ -711,15 +767,18 @@ const VariableRef = createReactInlineContentSpec(
  * What Modelo removes from BlockNote's defaults.
  *
  * A notebook holds prose and a model, not media, so the four file blocks go.
- * The toggle list and the toggleable heading go with them, and so do the two
- * colour styles. What cannot leave the schema leaves the menus instead
+ * The code block goes too: a calculation belongs in a formula block. So does
+ * the quote. The toggle list and the toggleable heading go with them, and so
+ * do the two colour styles. What cannot leave the schema leaves the menus instead
  * (`editor-menus.tsx`): every default block carries text alignment and block
  * colour, and nesting is structural.
  */
 const {
   audio: _audio,
+  codeBlock: _codeBlock,
   file: _file,
   image: _image,
+  quote: _quote,
   toggleListItem: _toggleListItem,
   video: _video,
   ...keptBlockSpecs

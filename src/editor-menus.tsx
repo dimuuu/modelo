@@ -1,3 +1,4 @@
+import { SideMenuExtension } from "@blocknote/core";
 import {
   blockTypeSelectItems,
   DragHandleMenu,
@@ -7,10 +8,13 @@ import {
   SideMenu,
   TableColumnHeaderItem,
   TableRowHeaderItem,
+  useBlockNoteEditor,
   useDictionary,
+  useExtensionState,
 } from "@blocknote/react";
 import type { BlockTypeSelectItem, SideMenuProps } from "@blocknote/react";
 
+import { modeloSchema, SelectOptions } from "./editor";
 import { HEADING_LEVELS } from "./engine/document";
 
 /**
@@ -35,16 +39,21 @@ const headingLevels = new Set<number>(HEADING_LEVELS);
 /**
  * BlockNote's own block types, minus the ones this schema does not have.
  *
- * Every heading entry asks for an `isToggleable` prop. The select drops an
- * entry whose props are not in the schema, so leaving that prop in place would
- * hide all headings and leave no way to make one.
+ * The schema decides which types survive, so removing a block spec in
+ * `editor.tsx` empties its entry here too. Every heading entry asks for an
+ * `isToggleable` prop. The select drops an entry whose props are not in the
+ * schema, so leaving that prop in place would hide all headings and leave no
+ * way to make one.
  */
 export function modeloBlockTypeItems(
   items: BlockTypeSelectItem[]
 ): BlockTypeSelectItem[] {
   return items.flatMap((item) => {
     const { isToggleable, level, ...rest } = item.props ?? {};
-    if (isToggleable === true || item.type === "toggleListItem") {
+    if (
+      isToggleable === true ||
+      !Object.hasOwn(modeloSchema.blockSchema, item.type)
+    ) {
       return [];
     }
     if (typeof level === "number" && !headingLevels.has(level)) {
@@ -78,9 +87,21 @@ export function ModeloFormattingToolbar() {
   );
 }
 
-/** The drag handle menu without its colour picker. */
+/**
+ * The drag handle menu without its colour picker.
+ *
+ * A select block adds its option list here. The menu stays open while the
+ * document changes, because BlockNote freezes the side menu for as long as
+ * the dropdown is open.
+ */
 function ModeloDragHandleMenu() {
   const dictionary = useDictionary();
+  const editor = useBlockNoteEditor();
+  // The block the six dots belong to. The side menu freezes on the same block
+  // while this menu is open, so the panel below cannot jump to another one.
+  const block = useExtensionState(SideMenuExtension, {
+    selector: (state) => state?.block,
+  });
   return (
     <DragHandleMenu>
       <RemoveBlockItem>
@@ -92,6 +113,12 @@ function ModeloDragHandleMenu() {
       <TableColumnHeaderItem>
         {dictionary.drag_handle.header_column_menuitem}
       </TableColumnHeaderItem>
+      {block?.type === "select" && (
+        <>
+          <div className="my-1 border-t" />
+          <SelectOptions block={block as never} editor={editor} />
+        </>
+      )}
     </DragHandleMenu>
   );
 }

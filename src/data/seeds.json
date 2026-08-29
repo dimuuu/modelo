@@ -500,5 +500,403 @@
         ]
       }
     ]
+  },
+  {
+    "id": "block-gallery",
+    "description": "One block of every type, every number format, and both failure states, for testing the editor.",
+    "blocks": [
+      {
+        "id": "gallery-title",
+        "type": "heading",
+        "level": 1,
+        "inline": ["Block gallery"]
+      },
+      {
+        "id": "gallery-intro",
+        "type": "paragraph",
+        "inline": [
+          "Every block type, every number format, and both failure states, in one notebook. Open it after an editor change and read down the page."
+        ]
+      },
+      {
+        "id": "gallery-prose-heading",
+        "type": "heading",
+        "level": 2,
+        "inline": ["Prose"]
+      },
+      {
+        "id": "gallery-prose-sub",
+        "type": "heading",
+        "level": 3,
+        "inline": ["A level 3 heading"]
+      },
+      {
+        "id": "gallery-prose-plain",
+        "type": "paragraph",
+        "inline": ["A plain paragraph. It carries no styles and no references."]
+      },
+      {
+        "id": "gallery-prose-styled",
+        "type": "paragraph",
+        "inline": [
+          "Styled runs: ",
+          {
+            "styles": {
+              "bold": true
+            },
+            "text": "bold",
+            "type": "text"
+          },
+          ", ",
+          {
+            "styles": {
+              "italic": true
+            },
+            "text": "italic",
+            "type": "text"
+          },
+          ", ",
+          {
+            "styles": {
+              "underline": true
+            },
+            "text": "underline",
+            "type": "text"
+          },
+          ", ",
+          {
+            "styles": {
+              "strike": true
+            },
+            "text": "strikethrough",
+            "type": "text"
+          },
+          ", and ",
+          {
+            "styles": {
+              "code": true
+            },
+            "text": "code",
+            "type": "text"
+          },
+          "."
+        ]
+      },
+      {
+        "id": "gallery-bullet-1",
+        "type": "bulletListItem",
+        "inline": ["The first bullet item."]
+      },
+      {
+        "id": "gallery-bullet-2",
+        "type": "bulletListItem",
+        "inline": ["The second bullet item, with a nested child."],
+        "children": [
+          {
+            "id": "gallery-bullet-2-child",
+            "type": "bulletListItem",
+            "inline": ["A nested bullet item."]
+          }
+        ]
+      },
+      {
+        "id": "gallery-number-1",
+        "type": "numberedListItem",
+        "inline": ["The first numbered item."]
+      },
+      {
+        "id": "gallery-number-2",
+        "type": "numberedListItem",
+        "inline": ["The second numbered item."]
+      },
+      {
+        "id": "gallery-check-1",
+        "type": "checkListItem",
+        "props": {
+          "checked": true
+        },
+        "inline": ["A checked item."]
+      },
+      {
+        "id": "gallery-check-2",
+        "type": "checkListItem",
+        "props": {
+          "checked": false
+        },
+        "inline": ["An unchecked item."]
+      },
+      {
+        "id": "gallery-divider",
+        "type": "divider"
+      },
+      {
+        "id": "gallery-inputs-heading",
+        "type": "heading",
+        "level": 2,
+        "inline": ["Inputs"]
+      },
+      {
+        "id": "gallery-inputs-note",
+        "type": "paragraph",
+        "inline": ["One block per input type, and one per number format."]
+      },
+      {
+        "id": "gallery-plain-number",
+        "type": "number",
+        "varId": "gallery-plain-number-var",
+        "name": "plain_number",
+        "value": 42,
+        "min": 0,
+        "step": 1
+      },
+      {
+        "id": "gallery-money-eur",
+        "type": "number",
+        "varId": "gallery-money-eur-var",
+        "name": "money_eur",
+        "value": 1234.5,
+        "format": "currency",
+        "currency": "EUR",
+        "step": 100
+      },
+      {
+        "id": "gallery-money-usd",
+        "type": "number",
+        "varId": "gallery-money-usd-var",
+        "name": "money_usd",
+        "value": 99,
+        "format": "currency",
+        "currency": "USD",
+        "decimals": 2,
+        "step": 1
+      },
+      {
+        "id": "gallery-growth-rate",
+        "type": "number",
+        "varId": "gallery-growth-rate-var",
+        "name": "growth_rate",
+        "value": 12.5,
+        "format": "percent",
+        "step": 0.5
+      },
+      {
+        "id": "gallery-distance",
+        "type": "number",
+        "varId": "gallery-distance-var",
+        "name": "distance_km",
+        "value": 12.5,
+        "format": "unit",
+        "unit": "km",
+        "step": 0.5
+      },
+      {
+        "id": "gallery-precise",
+        "type": "number",
+        "varId": "gallery-precise-var",
+        "name": "precise_number",
+        "value": 3.14159,
+        "decimals": 4,
+        "step": 0.0001
+      },
+      {
+        "id": "gallery-slider-basic",
+        "type": "slider",
+        "varId": "gallery-slider-basic-var",
+        "name": "slider_basic",
+        "value": 60,
+        "min": 0,
+        "max": 100,
+        "step": 5
+      },
+      {
+        "id": "gallery-slider-money",
+        "type": "slider",
+        "varId": "gallery-slider-money-var",
+        "name": "slider_money",
+        "value": 180000,
+        "format": "currency",
+        "currency": "EUR",
+        "min": 0,
+        "max": 500000,
+        "step": 10000
+      },
+      {
+        "id": "gallery-slider-percent",
+        "type": "slider",
+        "varId": "gallery-slider-percent-var",
+        "name": "slider_percent",
+        "value": 35,
+        "format": "percent",
+        "min": 0,
+        "max": 100,
+        "step": 1
+      },
+      {
+        "id": "gallery-select",
+        "type": "select",
+        "varId": "gallery-select-var",
+        "name": "plan_tier",
+        "value": 1,
+        "options": [
+          {
+            "label": "Starter",
+            "value": 0
+          },
+          {
+            "label": "Growth",
+            "value": 1
+          },
+          {
+            "label": "Scale",
+            "value": 2
+          }
+        ]
+      },
+      {
+        "id": "gallery-boolean",
+        "type": "boolean",
+        "varId": "gallery-boolean-var",
+        "name": "feature_on",
+        "value": 1
+      },
+      {
+        "id": "gallery-formulas-heading",
+        "type": "heading",
+        "level": 2,
+        "inline": ["Formulas"]
+      },
+      {
+        "id": "gallery-formulas-note",
+        "type": "paragraph",
+        "inline": [
+          "Short names, long names, and long expressions, so the row can be measured at both ends."
+        ]
+      },
+      {
+        "id": "gallery-sum",
+        "type": "formula",
+        "varId": "gallery-sum-var",
+        "name": "sum",
+        "formula": "plain_number + slider_basic"
+      },
+      {
+        "id": "gallery-tier",
+        "type": "formula",
+        "varId": "gallery-tier-var",
+        "name": "tier_multiplier",
+        "formula": "plan_tier + 1"
+      },
+      {
+        "id": "gallery-gated",
+        "type": "formula",
+        "varId": "gallery-gated-var",
+        "name": "gated_total",
+        "formula": "feature_on ? money_eur * 2 : money_eur"
+      },
+      {
+        "id": "gallery-long-name",
+        "type": "formula",
+        "varId": "gallery-long-name-var",
+        "name": "a_deliberately_long_variable_name_for_layout",
+        "formula": "money_eur"
+      },
+      {
+        "id": "gallery-long-formula",
+        "type": "formula",
+        "varId": "gallery-long-formula-var",
+        "name": "long_expression",
+        "formula": "money_eur * (1 + growth_rate) * tier_multiplier + slider_money * slider_percent - money_eur * slider_percent / 2"
+      },
+      {
+        "id": "gallery-errors-heading",
+        "type": "heading",
+        "level": 2,
+        "inline": ["Failure states"]
+      },
+      {
+        "id": "gallery-errors-note",
+        "type": "paragraph",
+        "inline": [
+          "Both blocks below are wrong on purpose. Neither may render a zero."
+        ]
+      },
+      {
+        "id": "gallery-missing",
+        "type": "formula",
+        "varId": "gallery-missing-var",
+        "name": "missing_dependency",
+        "formula": "money_eur / unknown_variable"
+      },
+      {
+        "id": "gallery-broken",
+        "type": "formula",
+        "varId": "gallery-broken-var",
+        "name": "broken_syntax",
+        "formula": "money_eur * * 2"
+      },
+      {
+        "id": "gallery-refs-heading",
+        "type": "heading",
+        "level": 2,
+        "inline": ["Inline references"]
+      },
+      {
+        "id": "gallery-refs-ok",
+        "type": "paragraph",
+        "inline": [
+          "A chip per status. This one is fine: ",
+          {
+            "name": "sum",
+            "type": "ref",
+            "varId": "gallery-sum-var"
+          },
+          ". So is this currency chip: ",
+          {
+            "name": "money_eur",
+            "type": "ref",
+            "varId": "gallery-money-eur-var"
+          },
+          ", and this percent chip: ",
+          {
+            "name": "growth_rate",
+            "type": "ref",
+            "varId": "gallery-growth-rate-var"
+          },
+          "."
+        ]
+      },
+      {
+        "id": "gallery-refs-bad",
+        "type": "paragraph",
+        "inline": [
+          "These two must read as failures, never as zero: ",
+          {
+            "name": "missing_dependency",
+            "type": "ref",
+            "varId": "gallery-missing-var"
+          },
+          " and ",
+          {
+            "name": "broken_syntax",
+            "type": "ref",
+            "varId": "gallery-broken-var"
+          },
+          "."
+        ]
+      },
+      {
+        "id": "gallery-refs-list",
+        "type": "bulletListItem",
+        "inline": [
+          "A reference inside a list item: ",
+          {
+            "name": "gated_total",
+            "type": "ref",
+            "varId": "gallery-gated-var"
+          },
+          "."
+        ]
+      }
+    ]
   }
 ]

@@ -20,10 +20,10 @@ import {
 import type { NotebookRecord } from "../src/workspace";
 
 describe("workspace persistence", () => {
-  it("copies three seeds only on first run", () => {
+  it("copies every seed only on first run", () => {
     const storage = { getItem: () => null } as Pick<Storage, "getItem">;
     const workspace = loadWorkspace(storage);
-    expect(workspace.notebooks).toHaveLength(3);
+    expect(workspace.notebooks).toHaveLength(4);
     expect(workspace.notebooks.map((n) => n.id)).toContain(
       "sales-ae-comp-plan"
     );
@@ -49,7 +49,7 @@ describe("workspace persistence", () => {
     );
     saveWorkspace(renamed, storage);
     const restored = loadWorkspace(storage);
-    expect(restored.notebooks).toHaveLength(2);
+    expect(restored.notebooks).toHaveLength(3);
     expect(notebookTitle(restored.notebooks[0])).toBe("My changed model");
     expect(
       restored.notebooks.some((n) => n.id === "founders-runway-plan")
@@ -60,7 +60,7 @@ describe("workspace persistence", () => {
     const storage = {
       getItem: () => JSON.stringify({ notebooks: [], version: 1 }),
     } as Pick<Storage, "getItem">;
-    expect(loadWorkspace(storage).notebooks).toHaveLength(3);
+    expect(loadWorkspace(storage).notebooks).toHaveLength(4);
   });
 
   it("converts typed flat blocks and parses known @names in paragraph text", () => {
@@ -107,8 +107,8 @@ describe("workspace reducers", () => {
     expect(created.notebook.blocks).toEqual([
       { inline: [UNTITLED], level: 1, type: "heading" },
     ]);
-    expect(created.workspace.notebooks).toHaveLength(4);
-    expect(base.notebooks).toHaveLength(3);
+    expect(created.workspace.notebooks).toHaveLength(5);
+    expect(base.notebooks).toHaveLength(4);
 
     const [source] = base.notebooks;
     const copied = duplicateNotebook(created.workspace, source, "copy-id");

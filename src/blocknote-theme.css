@@ -36,3 +36,12 @@
     padding-inline: 22px;
   }
 }
+
+/*
+ * BlockNote lays a block row out as flex, so a custom block sizes to its
+ * content. Model blocks must fill the row instead.
+ */
+.bn-container .modelo-block {
+  flex: 1;
+  min-width: 0;
+}

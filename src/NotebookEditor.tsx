@@ -127,6 +127,7 @@ export function NotebookEditor({
         <BlockNoteView
           editor={editor}
           theme="light"
+          emojiPicker={false}
           formattingToolbar={false}
           sideMenu={false}
           slashMenu={false}

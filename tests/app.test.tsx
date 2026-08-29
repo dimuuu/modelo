@@ -230,10 +230,10 @@ describe("Modelo app smoke", () => {
       "value",
       "100"
     );
-    expect(screen.getByLabelText("Option 1 label")).toHaveProperty(
-      "value",
-      "Basic"
-    );
+    // The option list moved into the six-dot menu; the block shows the choice.
+    expect(
+      screen.getByRole("combobox", { name: "tier" }).textContent
+    ).toContain("Basic");
     expect(
       screen.getByRole("switch", { name: "hired" }).getAttribute("aria-checked")
     ).toBe("true");

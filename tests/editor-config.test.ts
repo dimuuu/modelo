@@ -30,7 +30,15 @@ describe("editor surface", () => {
   >;
 
   it("drops the block types a notebook has no use for", () => {
-    for (const type of ["audio", "file", "image", "toggleListItem", "video"]) {
+    for (const type of [
+      "audio",
+      "codeBlock",
+      "file",
+      "image",
+      "quote",
+      "toggleListItem",
+      "video",
+    ]) {
       expect(blockSchema).not.toHaveProperty(type);
     }
     expect(blockSchema.heading.propSchema).not.toHaveProperty("isToggleable");
