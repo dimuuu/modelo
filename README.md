@@ -26,7 +26,7 @@ pnpm dev
 Checks:
 
 ```bash
-pnpm test     # vitest, 43 tests
+pnpm test     # vitest, 50 tests
 pnpm check    # oxlint via ultracite
 pnpm fix      # oxlint --fix and oxfmt --write
 pnpm build    # tsc -b && vite build
@@ -37,6 +37,7 @@ pnpm build    # tsc -b && vite build
 - **React 19 + Vite 7 + TypeScript** — no framework, no server.
 - **BlockNote 0.54** — the editor, and the single source of truth for the document.
 - **MathJS 15** — formula parsing, unit algebra, and evaluation.
+- **zod 4** — every value crossing a boundary is parsed: WebMCP tool arguments, `localStorage`, and imported files. `src/webmcp/schemas.ts` is the single source for tool argument shapes.
 - **Tailwind CSS v4 + shadcn/ui (Base UI)** — every control in the app. The only hand-written CSS left is `src/blocknote-theme.css`, which binds BlockNote's own editor surface to the shadcn design tokens.
 - **Ultracite + oxlint + oxfmt** — formatting and linting. `oxlint.config.ts` documents every rule the project overrides and why.
 
@@ -54,7 +55,7 @@ Document tools register only while a notebook is open:
 - Write prose and model: `write_section`, `write_sections`, `insert_blocks`, `update_block`, `update_blocks`, `remove_blocks`, `remove_variable`, `replace_paragraph`, `insert_inline_ref`, `set_variable`
 - Scenarios: `list_scenarios`, `save_scenario`, `apply_scenario`, `delete_scenario`
 
-Tool failures are structured `{ ok: false, error: { code, message, details? } }` values without stack traces. Document mutations use the BlockNote editor API inside `editor.transact`.
+Tool arguments are validated against zod schemas before they reach the document; a mismatch returns an `INVALID_ARGUMENTS` failure. Tool failures are structured `{ ok: false, error: { code, message, details? } }` values without stack traces. Document mutations use the BlockNote editor API inside `editor.transact`.
 
 ### Suggested prompts against the Sales notebook
 
