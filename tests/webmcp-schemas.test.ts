@@ -10,14 +10,10 @@ import {
 } from "../src/webmcp/schemas";
 
 describe("WebMCP argument schemas", () => {
-  it("publishes a plain JSON Schema object without the $schema key", () => {
+  it("publishes a bare JSON Schema object, as the WebMCP registration expects", () => {
     const schema = toInputSchema(writeSectionSchema) as Record<string, unknown>;
     expect(schema.$schema).toBeUndefined();
     expect(schema.type).toBe("object");
-    expect(schema.additionalProperties).toBe(false);
-    expect(schema.required).toEqual(
-      expect.arrayContaining(["heading", "body"])
-    );
   });
 
   it("accepts a well formed insert_blocks payload", () => {

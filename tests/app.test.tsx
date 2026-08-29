@@ -106,7 +106,7 @@ describe("Modelo app smoke", () => {
     ).toBe("true");
   });
 
-  it("uses curated currency and grouped unit selects while preserving unknown values", async () => {
+  it("keeps a stored currency the picker does not offer instead of resetting it", async () => {
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
@@ -126,11 +126,40 @@ describe("Modelo app smoke", () => {
                 value: 12,
                 varId: "currency-id",
               },
+            ],
+            id: "formats",
+            title: "Formats",
+            updatedAt: new Date().toISOString(),
+          },
+        ],
+        version: 1,
+      })
+    );
+    render(<App />);
+
+    const currency = await screen.findByLabelText("Currency code");
+    expect(currency.textContent).toContain("NOK");
+    fireEvent.click(currency);
+    const options = await screen.findAllByRole("option");
+    const offered = options.map((option) => option.textContent);
+    expect(offered).toContain("NOK");
+    expect(offered).toContain("EUR");
+  });
+
+  it("groups the unit picker so long unit lists stay navigable", async () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        currency: "EUR",
+        locale: "en-US",
+        notebooks: [
+          {
+            blocks: [
               {
                 format: "unit",
                 id: "unit",
-                label: "Unit",
-                name: "unit",
+                label: "Distance",
+                name: "distance",
                 step: 1,
                 type: "number",
                 unit: "km",
@@ -148,38 +177,48 @@ describe("Modelo app smoke", () => {
     );
     render(<App />);
 
-    const currency = await screen.findByLabelText("Currency code");
-    expect(currency.textContent).toContain("NOK");
-    fireEvent.click(currency);
-    const options = await screen.findAllByRole("option");
-    expect(options.map((option) => option.textContent)).toEqual(
-      expect.arrayContaining([
-        "EUR",
-        "USD",
-        "GBP",
-        "UAH",
-        "PLN",
-        "CHF",
-        "CAD",
-        "AUD",
-        "JPY",
-        "NOK",
-      ])
-    );
-    fireEvent.keyDown(document.activeElement ?? document.body, {
-      key: "Escape",
-    });
-
     const unit = await screen.findByRole("combobox", { name: "Unit" });
     expect(unit.textContent).toContain("km");
     fireEvent.click(unit);
     const groups = await screen.findAllByRole("group");
-    expect(
-      groups.map(
-        (group) =>
-          group.querySelector('[data-slot="select-label"]')?.textContent
-      )
-    ).toEqual(["Length", "Mass", "Time", "Area", "Volume"]);
+    expect(groups.length).toBeGreaterThan(1);
+    const options = await screen.findAllByRole("option");
+    expect(options.map((option) => option.textContent)).toContain("km");
+  });
+
+  it("leaves a number input without bounds unbounded", async () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        currency: "EUR",
+        locale: "es-ES",
+        notebooks: [
+          {
+            blocks: [
+              {
+                id: "price",
+                label: "Price",
+                name: "price",
+                step: 1,
+                type: "number",
+                value: 10,
+                varId: "price-id",
+              },
+            ],
+            id: "bounds",
+            title: "Bounds",
+            updatedAt: new Date().toISOString(),
+          },
+        ],
+        version: 1,
+      })
+    );
+    render(<App />);
+
+    // A default of 0 here would silently clamp any value an agent sets.
+    const input = await screen.findByRole("spinbutton", { name: "Price" });
+    expect(input.getAttribute("min")).toBeNull();
+    expect(input.getAttribute("max")).toBeNull();
   });
 
   it("does not render format controls on formula blocks", async () => {

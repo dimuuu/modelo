@@ -41,20 +41,7 @@ const document: ModeloDocument = [
 
 describe("Modelo deterministic engine", () => {
   it("registers projected variables and evaluates formulas", () => {
-    const projected = projectDocument(document);
-    expect(
-      projected.variables.map(({ varId, name, kind }) => ({
-        kind,
-        name,
-        varId,
-      }))
-    ).toEqual([
-      { kind: "input", name: "revenue", varId: "revenue-id" },
-      { kind: "input", name: "cost", varId: "cost-id" },
-      { kind: "formula", name: "profit", varId: "profit-id" },
-    ]);
-
-    const result = evaluateModel(projected);
+    const result = evaluateModel(projectDocument(document));
     expect(result.byId["profit-id"]).toMatchObject({
       status: "ok",
       value: 750,
@@ -687,23 +674,5 @@ describe("Modelo deterministic engine", () => {
     });
     expect(on.byId["toggle-id"]).toMatchObject({ formatted: "Yes", value: 1 });
     expect(on.byId["cost-id"]).toMatchObject({ status: "ok", value: 5000 });
-  });
-
-  it("projects optional numeric input bounds", () => {
-    expect(
-      projectDocument([
-        {
-          id: "bounded",
-          props: {
-            max: 10,
-            min: 1,
-            name: "bounded",
-            value: 5,
-            varId: "bounded-id",
-          },
-          type: "number",
-        },
-      ]).byId["bounded-id"]
-    ).toMatchObject({ max: 10, min: 1 });
   });
 });

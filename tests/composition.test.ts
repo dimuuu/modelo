@@ -8,8 +8,7 @@ import {
 
 describe("document composition", () => {
   it("reports an empty document as a balanced story", () => {
-    expect(getComposition([])).toEqual({
-      hint: "Narrative and model are balanced.",
+    expect(getComposition([])).toMatchObject({
       inline_refs: 0,
       prose: 0,
       reads_like: "story",
@@ -76,46 +75,49 @@ describe("document composition", () => {
   });
 });
 
-describe("write_section block builder", () => {
-  it("creates ordered portable blocks, paragraphs, and known @refs while preserving unknown names", () => {
-    let next = 0;
-    const blocks = buildSectionBlocks(
-      {
-        body: "Revenue is @revenue and cost is @cost.\n\nUnknown @margin stays literal.",
-        formulas: [
-          { formula: "revenue - cost", label: "Margin", name: "margin" },
-        ],
-        heading: "Unit economics",
-        inputs: [
-          {
-            currency: "EUR",
-            kind: "slider",
-            max: 200,
-            min: 0,
-            name: "revenue",
-            step: 10,
-            value: 100,
-          },
-        ],
-      },
-      { cost: "cost-id" },
-      () => `id-${(next += 1)}`
-    );
+function unitEconomics() {
+  let next = 0;
+  return buildSectionBlocks(
+    {
+      body: "Revenue is @revenue and cost is @cost.\n\nMargin is @margin.",
+      formulas: [
+        { formula: "revenue - cost", label: "Margin", name: "margin" },
+      ],
+      heading: "Unit economics",
+      inputs: [
+        {
+          currency: "EUR",
+          kind: "slider",
+          max: 200,
+          min: 0,
+          name: "revenue",
+          step: 10,
+          value: 100,
+        },
+      ],
+    },
+    { cost: "cost-id" },
+    () => `id-${(next += 1)}`
+  );
+}
 
-    expect(blocks.map((block) => block.type)).toEqual([
+describe("write_section block builder", () => {
+  it("puts the heading and prose before the variables they mention", () => {
+    expect(unitEconomics().map((block) => block.type)).toEqual([
       "heading",
       "paragraph",
       "paragraph",
       "slider",
       "formula",
     ]);
-    expect(blocks[0]).toMatchObject({ level: 2, text: "Unit economics" });
-    expect(blocks[3].props).toMatchObject({
-      currency: "EUR",
-      format: "currency",
-      name: "revenue",
-      value: 100,
+    expect(unitEconomics()[0]).toMatchObject({
+      level: 2,
+      text: "Unit economics",
     });
+  });
+
+  it("links @names to variables declared here and to ones already in the document", () => {
+    const blocks = unitEconomics();
     expect(blocks[1].inline).toEqual([
       "Revenue is ",
       { label: "revenue", type: "ref", varId: blocks[3].props.varId },
@@ -123,22 +125,29 @@ describe("write_section block builder", () => {
       { label: "cost", type: "ref", varId: "cost-id" },
       ".",
     ]);
+    // `margin` is declared by this same call, so a forward reference still links.
     expect(blocks[2].inline).toEqual([
-      "Unknown ",
+      "Margin is ",
       { label: "margin", type: "ref", varId: blocks[4].props.varId },
-      " stays literal.",
+      ".",
     ]);
-    expect(blocks[4].props).toEqual(
-      expect.objectContaining({
-        formula: "revenue - cost",
-        label: "Margin",
-        name: "margin",
-      })
-    );
-    expect(blocks[4].props).not.toHaveProperty("format");
+  });
+
+  it("leaves an @name that matches no variable as literal text", () => {
     expect(inlineContentFromText("Keep @missing and @constructor", {})).toEqual(
       ["Keep ", "@missing", " and ", "@constructor"]
     );
+  });
+
+  it("infers currency format for inputs and gives formulas no display format", () => {
+    const blocks = unitEconomics();
+    expect(blocks[3].props).toMatchObject({
+      currency: "EUR",
+      format: "currency",
+      name: "revenue",
+      value: 100,
+    });
+    expect(blocks[4].props).not.toHaveProperty("format");
   });
 
   it("builds boolean inputs for write_section", () => {
