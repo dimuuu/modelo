@@ -1,14 +1,4 @@
 {
-  "name": "modelo",
-  "private": true,
-  "version": "1.0.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "test": "vitest run",
-    "preview": "vite preview"
-  },
   "dependencies": {
     "@blocknote/core": "0.54.0",
     "@blocknote/mantine": "0.54.0",
@@ -24,8 +14,23 @@
     "@types/react-dom": "19.2.4",
     "@vitejs/plugin-react": "5.0.4",
     "happy-dom": "20.0.10",
+    "oxfmt": "^0.64.0",
+    "oxlint": "^1.79.0",
     "typescript": "5.9.3",
+    "ultracite": "7.10.6",
     "vite": "7.1.7",
     "vitest": "3.2.4"
-  }
+  },
+  "name": "modelo",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "test": "vitest run",
+    "preview": "vite preview",
+    "check": "ultracite check",
+    "fix": "ultracite fix"
+  },
+  "type": "module",
+  "version": "1.0.0",
+  "private": true
 }
