@@ -1,24 +1,39 @@
+import { z } from "zod";
+
 import seeds from "./data/seeds.json";
-import type { Scenario } from "./engine/scenarios";
+import { scenarioSchema } from "./engine/scenarios";
 import { inlineContentFromText } from "./engine/section";
 
-export interface Notebook {
-  id: string;
-  title: string;
-  description?: string;
-  blocks: unknown[];
-  updatedAt: string;
-  scenarios?: Scenario[];
-}
-export interface Workspace {
-  version: 1;
-  notebooks: Notebook[];
-  currency: string;
-  locale: string;
-}
 export const STORAGE_KEY = "modelo.workspace.v1";
 export const DEFAULT_CURRENCY = "EUR";
 export const DEFAULT_LOCALE = "es-ES";
+
+export const notebookSchema = z.object({
+  blocks: z.array(z.unknown()),
+  description: z.string().optional(),
+  id: z.string(),
+  scenarios: z.array(scenarioSchema).optional(),
+  title: z.string(),
+  updatedAt: z.string(),
+});
+
+/**
+ * The persisted workspace. Display defaults are optional here and filled in by
+ * parseWorkspace, so an older v1 snapshot loads without a storage-key
+ * migration.
+ */
+export const workspaceSchema = z.object({
+  currency: z.string().min(1).optional(),
+  locale: z.string().min(1).optional(),
+  notebooks: z.array(notebookSchema),
+  version: z.literal(1),
+});
+
+export type Notebook = z.infer<typeof notebookSchema>;
+export type Workspace = Omit<
+  z.infer<typeof workspaceSchema>,
+  "currency" | "locale"
+> & { currency: string; locale: string };
 
 const now = () => new Date().toISOString();
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value));
@@ -36,6 +51,35 @@ export function seededWorkspace(): Workspace {
   };
 }
 
+/**
+ * Parses a stored or imported workspace document. Returns null when the JSON
+ * is unreadable or does not describe a v1 workspace, so the caller can fall
+ * back rather than crash on someone else's file.
+ */
+export function parseWorkspace(source: string | unknown): Workspace | null {
+  let value: unknown = source;
+  if (typeof source === "string") {
+    try {
+      value = JSON.parse(source);
+    } catch {
+      return null;
+    }
+  }
+  const result = workspaceSchema.safeParse(value);
+  if (!result.success) {
+    return null;
+  }
+  return {
+    ...result.data,
+    currency: result.data.currency ?? DEFAULT_CURRENCY,
+    locale: result.data.locale ?? DEFAULT_LOCALE,
+    notebooks: result.data.notebooks.map((notebook) => ({
+      ...notebook,
+      scenarios: notebook.scenarios ?? [],
+    })),
+  };
+}
+
 export function loadWorkspace(
   storage: Pick<Storage, "getItem"> = localStorage
 ): Workspace {
@@ -43,26 +87,8 @@ export function loadWorkspace(
   if (!saved) {
     return seededWorkspace();
   }
-  try {
-    const parsed = JSON.parse(saved) as Partial<Workspace>;
-    if (parsed.version === 1 && Array.isArray(parsed.notebooks)) {
-      return {
-        ...parsed,
-        currency: parsed.currency || DEFAULT_CURRENCY,
-        locale: parsed.locale || DEFAULT_LOCALE,
-        notebooks: parsed.notebooks.map((notebook) => ({
-          ...notebook,
-          scenarios: Array.isArray(notebook.scenarios)
-            ? notebook.scenarios
-            : [],
-        })),
-        version: 1,
-      };
-    }
-  } catch {
-    /* fall through to a recoverable fresh workspace */
-  }
-  return seededWorkspace();
+  const parsed = parseWorkspace(saved);
+  return parsed ?? seededWorkspace();
 }
 
 export function saveWorkspace(

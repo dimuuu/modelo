@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 import type { ModeloBlock, ModeloDocument } from "../model";
 
 /** Boolean inputs persist as 0 or 1, every other input keeps its number. */
@@ -18,11 +20,13 @@ export const SCENARIO_INPUT_TYPES = new Set([
   "boolean",
 ]);
 
-export interface Scenario {
-  id: string;
-  name: string;
-  values: Record<string, number>;
-}
+export const scenarioSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  values: z.record(z.string(), z.number()),
+});
+
+export type Scenario = z.infer<typeof scenarioSchema>;
 
 function visitInputs(
   blocks: ModeloDocument,

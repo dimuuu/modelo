@@ -64,12 +64,13 @@ import {
   upsertScenario,
 } from "./engine";
 import type { Scenario } from "./engine";
+import { ModeloToolError } from "./webmcp/types";
+import type { NotebookVariableSelector } from "./webmcp/types";
 import { useModeloTools } from "./webmcp/useModeloTools";
 import type { ModeloToolsAdapter } from "./webmcp/useModeloTools";
 import {
-  DEFAULT_CURRENCY,
-  DEFAULT_LOCALE,
   loadWorkspace,
+  parseWorkspace,
   portableToEditorBlocks,
   saveWorkspace,
   STORAGE_KEY,
@@ -80,25 +81,14 @@ import "./blocknote-theme.css";
 
 const uid = () => crypto.randomUUID();
 const ok = (data: unknown = {}) => ({ data, ok: true });
-/**
- * A WebMCP tool failure. `useModeloTools` serialises the public fields into
- * the `{ ok: false, error: { code, message, details? } }` contract.
- */
-class ModeloToolError extends Error {
-  readonly code: string;
-  readonly details?: unknown;
-
-  constructor(code: string, message: string, details?: unknown) {
-    super(message);
-    this.name = "ModeloToolError";
-    this.code = code;
-    this.details = details;
-  }
-}
-
 const fault = (code: string, message: string, details?: unknown): never => {
   throw new ModeloToolError(code, message, details);
 };
+
+/** The name or stable id a variable selector addresses, for error messages. */
+function selectorLabel(selector: NotebookVariableSelector): string {
+  return "name" in selector ? selector.name : selector.varId;
+}
 
 /** The block new content is appended after. A document always has one. */
 function lastBlock(editor: ModeloEditor) {
@@ -693,7 +683,7 @@ export default function App() {
               } catch {
                 return fault(
                   "NOT_FOUND",
-                  `Variable '${args.name ?? args.varId}' not found.`
+                  `Variable '${selectorLabel(args)}' not found.`
                 );
               }
             },
@@ -863,7 +853,7 @@ export default function App() {
               } catch {
                 return fault(
                   "NOT_FOUND",
-                  `Variable '${args.name ?? args.varId}' not found.`
+                  `Variable '${selectorLabel(args)}' not found.`
                 );
               }
               const model = projectDocument(editor.document as any);
@@ -1383,21 +1373,10 @@ export default function App() {
 
   const importWorkspace = async (file: File) => {
     try {
-      const parsed = JSON.parse(await file.text());
-      if (parsed.version !== 1 || !Array.isArray(parsed.notebooks)) {
+      const normalized = parseWorkspace(await file.text());
+      if (!normalized) {
         throw new Error("Not a Modelo workspace export");
       }
-      const normalized = {
-        ...parsed,
-        currency: parsed.currency || DEFAULT_CURRENCY,
-        locale: parsed.locale || DEFAULT_LOCALE,
-        notebooks: parsed.notebooks.map((notebook: Notebook) => ({
-          ...notebook,
-          scenarios: Array.isArray(notebook.scenarios)
-            ? notebook.scenarios
-            : [],
-        })),
-      };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
       setWorkspace(normalized);
       setOpenId(normalized.notebooks[0]?.id ?? null);

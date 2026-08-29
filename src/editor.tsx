@@ -10,6 +10,7 @@ import {
 import { XIcon } from "lucide-react";
 import { createContext, useContext, useId } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,10 +36,7 @@ import type { EvaluationResult } from "./model";
 const ModelContext = createContext<EvaluationResult | null>(null);
 export const ModelProvider = ModelContext.Provider;
 
-interface SelectOption {
-  label: string;
-  value: number;
-}
+type SelectOption = z.infer<typeof selectOptionSchema>;
 type ModelKind = "number" | "slider" | "select" | "boolean" | "formula";
 
 const DECIMALS_AUTO = -1;
@@ -63,22 +61,26 @@ const FORMAT_OPTIONS = [
   { label: "Unit", value: "unit" },
 ];
 
+const selectOptionSchema = z.object({
+  label: z.string(),
+  value: z.number().finite(),
+});
+
+/** Reads the `options` JSON prop, dropping any entry that is not well formed. */
 export function parseSelectOptions(value: string): SelectOption[] {
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(value);
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    return parsed.filter(
-      (option): option is SelectOption =>
-        option &&
-        typeof option.label === "string" &&
-        typeof option.value === "number" &&
-        Number.isFinite(option.value)
-    );
+    parsed = JSON.parse(value);
   } catch {
     return [];
   }
+  if (!Array.isArray(parsed)) {
+    return [];
+  }
+  return parsed.flatMap((option) => {
+    const result = selectOptionSchema.safeParse(option);
+    return result.success ? [result.data] : [];
+  });
 }
 
 export function clampSliderValue(
