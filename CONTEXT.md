@@ -14,8 +14,9 @@ These are the names the code uses. Use them in modules, in tests, in docs, and i
 
 ## The model
 
-- **Variable** — a named value with a stable id that formulas can use. Every variable block declares one. The name is the only caption; a block has no separate label. The rules live in `src/engine/variable.ts`.
-- **Input** — a variable a reader sets: number, slider, select, or boolean. A boolean stores 0 or 1. A slider stays inside its bounds.
+- **Variable** — a named value with a stable id that formulas can use. Every variable block declares one. The name is the only caption; a block has no separate label. The engine requires a MathJS identifier and nothing more, but every name in the app is PascalCase: the seeds, the defaults, and the names an agent writes. The rules live in `src/engine/variable.ts`.
+- **Input** — a variable a reader sets: number, slider, select, or boolean. A boolean stores 0 or 1. A slider stays inside its bounds, and it is the only input with a step; a number input takes any value.
+- **Block configuration** — format, currency, unit, decimals, slider bounds, and select options. None of it renders in the block. It fills the drag handle menu behind the six dots (`src/block-config.tsx`).
 - **Formula** — a variable computed from a MathJS expression over other variables. Its display format comes from its units, never from a stored field.
 - **Projection** — the walk from blocks to the variable registry (`inspectDocument`, `src/engine/projector.ts`). It is lenient: an invalid block becomes an **issue** on that block. `projectDocument` is the strict form and throws.
 - **Evaluation** — resolving the formula graph by dependency, not by block order (`evaluateModel`, `src/engine/evaluate.ts`). A variable is `ok`, `missing`, or `error`. Zero is never substituted.

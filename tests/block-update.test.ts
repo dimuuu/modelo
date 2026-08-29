@@ -68,7 +68,6 @@ describe("planBlockUpdate", () => {
   });
 
   it.each([
-    [{ step: 0 }, "step must be positive."],
     [{ decimals: 9 }, "decimals must be an integer from 0 to 8."],
     [{ max: 1, min: 5 }, "min must not exceed max."],
     [{ format: "unit" }, "unit format requires a unit."],
@@ -77,6 +76,18 @@ describe("planBlockUpdate", () => {
       code: "INVALID_VALUE",
       message,
       ok: false,
+    });
+  });
+
+  it("takes a step from a slider and refuses one on a number", () => {
+    expect(plan("slider", { step: 0 })).toEqual({
+      code: "INVALID_VALUE",
+      message: "step must be positive.",
+      ok: false,
+    });
+    // A number input takes any value, so it has no step to set.
+    expect(plan("number", { step: 5 })).toMatchObject({
+      code: "INVALID_UPDATE",
     });
   });
 

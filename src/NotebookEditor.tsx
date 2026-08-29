@@ -21,6 +21,7 @@ import type { ModeloDocument } from "./model";
 import { createBlockNotePort } from "./notebook/blocknote-port";
 import { ensureTitleBlock } from "./notebook/mutations";
 import type { EditorPort } from "./notebook/port";
+import { useColorScheme } from "./use-color-scheme";
 import type { NotebookRecord } from "./workspace";
 
 const MODEL_BLOCKS: {
@@ -59,6 +60,7 @@ export function NotebookEditor({
     schema: modeloSchema,
   });
   const port = useMemo(() => createBlockNotePort(editor), [editor]);
+  const colorScheme = useColorScheme();
   const [document, setDocument] = useState<ModeloDocument>(() => port.document);
   useEffect(() => {
     expose(port);
@@ -126,7 +128,7 @@ export function NotebookEditor({
       <div className="mx-auto max-w-[900px] pb-24">
         <BlockNoteView
           editor={editor}
-          theme="light"
+          theme={colorScheme}
           emojiPicker={false}
           formattingToolbar={false}
           sideMenu={false}

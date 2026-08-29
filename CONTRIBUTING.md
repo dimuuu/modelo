@@ -44,7 +44,7 @@ A model block is one variable. Five exist: `number`, `slider`, `select`, `boolea
 1. **Vocabulary.** Add the type to `INPUT_BLOCK_TYPES` in `src/engine/document.ts`. Projection, scenarios, composition, the portable format, and the tool schemas all read from it.
 2. **Rules.** If the type needs its own coercion or clamp, extend `coerceInputValue` in `src/engine/variable.ts`.
 3. **Update policy.** Add a row to `ALLOWED_FIELDS` in `src/engine/block-update.ts`.
-4. **Schema.** Add a `createReactBlockSpec` in `src/editor.tsx` and register it in `modeloSchema.blockSpecs`. Give the render an `aria-label` — the tests query by it.
+4. **Schema.** Add a `createReactBlockSpec` in `src/editor.tsx` and register it in `modeloSchema.blockSpecs`. Give the render an `aria-label` — the tests query by it. A block is one line: the name, one control, and the value. Anything you would configure goes in `src/block-config.tsx`, which fills the six-dot menu.
 5. **Defaults.** Extend `newVariableProps` in `src/engine/variable.ts` and `MODEL_BLOCKS` in `src/NotebookEditor.tsx` so the slash menu can insert one.
 6. **Tests.** Add the type to `tests/block-update.test.ts` and a round trip to `tests/portable.test.ts`.
 

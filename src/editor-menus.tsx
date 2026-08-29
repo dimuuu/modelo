@@ -1,4 +1,5 @@
 import { SideMenuExtension } from "@blocknote/core";
+import { SuggestionMenu } from "@blocknote/core/extensions";
 import {
   blockTypeSelectItems,
   DragHandleMenu,
@@ -9,12 +10,18 @@ import {
   TableColumnHeaderItem,
   TableRowHeaderItem,
   useBlockNoteEditor,
+  useComponentsContext,
   useDictionary,
+  useExtension,
   useExtensionState,
 } from "@blocknote/react";
 import type { BlockTypeSelectItem, SideMenuProps } from "@blocknote/react";
+import { GripVerticalIcon, PlusIcon } from "lucide-react";
 
-import { modeloSchema, SelectOptions } from "./editor";
+import { Button } from "@/components/ui/button";
+
+import { BlockConfig } from "./block-config";
+import { modeloSchema } from "./editor";
 import { HEADING_LEVELS } from "./engine/document";
 
 /**
@@ -113,16 +120,104 @@ function ModeloDragHandleMenu() {
       <TableColumnHeaderItem>
         {dictionary.drag_handle.header_column_menuitem}
       </TableColumnHeaderItem>
-      {block?.type === "select" && (
-        <>
-          <div className="my-1 border-t" />
-          <SelectOptions block={block as never} editor={editor} />
-        </>
-      )}
+      {block ? <BlockConfig block={block as never} editor={editor} /> : null}
     </DragHandleMenu>
   );
 }
 
+/** The one look both side menu buttons share: a small ghost icon button. */
+const SIDE_MENU_BUTTON = "text-muted-foreground size-6";
+
+/**
+ * The button that adds a block below the one under the cursor.
+ *
+ * BlockNote's own version paints a Mantine icon button with a react-icons
+ * glyph. This one is the app's button with the app's icon set, and it keeps
+ * BlockNote's behaviour: an empty block takes the cursor, a filled one gets a
+ * new paragraph after it, and either way the slash menu opens.
+ */
+function ModeloAddBlockButton() {
+  const editor = useBlockNoteEditor();
+  const dictionary = useDictionary();
+  const suggestions = useExtension(SuggestionMenu);
+  const block = useExtensionState(SideMenuExtension, {
+    selector: (state) => state?.block,
+  });
+  if (!block) {
+    return null;
+  }
+  const addBlock = () => {
+    const empty = Array.isArray(block.content) && block.content.length === 0;
+    const target = empty
+      ? block
+      : editor.insertBlocks([{ type: "paragraph" }], block, "after")[0];
+    editor.setTextCursorPosition(target);
+    suggestions.openSuggestionMenu("/");
+  };
+  return (
+    <Button
+      aria-label={dictionary.side_menu.add_block_label}
+      className={SIDE_MENU_BUTTON}
+      onClick={addBlock}
+      size="icon-sm"
+      type="button"
+      variant="ghost"
+    >
+      <PlusIcon className="size-4" />
+    </Button>
+  );
+}
+
+/**
+ * The six dots: drag a block, or open its menu.
+ *
+ * The menu root has to come from BlockNote's own component context, because
+ * the drag handle menu renders into it. The trigger inside it is the app's
+ * button.
+ */
+function ModeloDragHandleButton() {
+  const components = useComponentsContext();
+  const dictionary = useDictionary();
+  const sideMenu = useExtension(SideMenuExtension);
+  const block = useExtensionState(SideMenuExtension, {
+    selector: (state) => state?.block,
+  });
+  if (!(components && block)) {
+    return null;
+  }
+  const { Menu } = components.Generic;
+  return (
+    <Menu.Root
+      onOpenChange={(open: boolean) =>
+        open ? sideMenu.freezeMenu() : sideMenu.unfreezeMenu()
+      }
+      position="left"
+    >
+      <Menu.Trigger>
+        <Button
+          aria-label={dictionary.side_menu.drag_handle_label}
+          className={`${SIDE_MENU_BUTTON} cursor-grab active:cursor-grabbing`}
+          draggable
+          onDragEnd={() => sideMenu.blockDragEnd()}
+          onDragStart={(event: React.DragEvent) =>
+            sideMenu.blockDragStart(event, block)
+          }
+          type="button"
+          variant="ghost"
+        >
+          <GripVerticalIcon className="size-4" />
+        </Button>
+      </Menu.Trigger>
+      <ModeloDragHandleMenu />
+    </Menu.Root>
+  );
+}
+
 export function ModeloSideMenu(props: SideMenuProps) {
-  return <SideMenu {...props} dragHandleMenu={ModeloDragHandleMenu} />;
+  return (
+    <SideMenu {...props}>
+      <ModeloAddBlockButton />
+      <ModeloDragHandleButton />
+    </SideMenu>
+  );
 }

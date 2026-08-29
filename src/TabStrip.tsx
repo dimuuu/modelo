@@ -32,7 +32,7 @@ export function TabStrip({
         const active = index === state.active;
         return (
           <div
-            className={`group flex h-9 w-[200px] shrink-0 items-center gap-1 rounded-t-lg border border-b-0 pr-1 pl-3 ${
+            className={`group flex h-9 max-w-[200px] min-w-[92px] flex-1 items-center gap-1 rounded-t-lg border border-b-0 pr-1 pl-3 transition-colors duration-150 ease-out ${
               active
                 ? "bg-background border-border"
                 : "hover:bg-background/50 border-transparent"
@@ -41,15 +41,24 @@ export function TabStrip({
           >
             <button
               aria-current={active ? "page" : undefined}
-              className="min-w-0 flex-1 truncate text-left text-[13px]"
+              className="focus-visible:ring-ring/50 min-w-0 flex-1 truncate rounded-sm text-left text-[13px] outline-none focus-visible:ring-3"
               onClick={() => onActivate(index)}
               type="button"
             >
               {title}
             </button>
+            {/*
+             * The close button hides on an idle tab, and stays on the tab in
+             * front. A tap makes a tab the front tab, so a touch device always
+             * has one close button in reach without a hover media query.
+             */}
             <Button
               aria-label={`Close ${title}`}
-              className="text-muted-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+              className={`text-muted-foreground transition-opacity duration-150 ease-out ${
+                active
+                  ? ""
+                  : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+              }`}
               onClick={() => onClose(index)}
               size="icon-sm"
               title="Close tab"

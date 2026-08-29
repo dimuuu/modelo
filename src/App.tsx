@@ -23,6 +23,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 import "@blocknote/mantine/style.css";
 import type { PortableBlock } from "./engine/portable";
@@ -235,131 +236,143 @@ export default function App() {
   };
 
   return (
-    <div className="flex h-dvh flex-col">
-      <ModeloTools notebookOpen={openId !== null} runtime={runtime} />
-      <TabStrip
-        onActivate={(index) => updateTabs((c) => activateTab(c, index))}
-        onClose={(index) => updateTabs((c) => closeTab(c, index))}
-        onNewTab={() => updateTabs(newTab)}
-        state={tabState}
-        titleOf={titleOf}
-      />
-      <main className="min-h-0 flex-1">
-        {/*
-         * Home is stateless, so every home tab shares one panel. A notebook
-         * panel is keyed by its notebook, so closing another tab cannot
-         * remount it and lose the cursor.
-         */}
-        <div className="h-full overflow-y-auto" hidden={openId !== null}>
-          <HomeTab
-            onCreate={() =>
-              run("create_notebook", { name: "Untitled notebook" })
-            }
-            onDelete={(record) =>
-              setPendingDelete({
-                id: record.id,
-                kind: "notebook",
-                title: notebookTitle(record),
-              })
-            }
-            onDuplicate={(id) => run("duplicate_notebook", { id })}
-            onImport={importFile}
-            onOpen={(id) => run("open_notebook", { id })}
-            workspace={workspace}
-          />
-        </div>
-        {openNotebooks.map((notebook) => (
+    /*
+     * One tooltip provider for the app. It groups every tooltip, so hovering
+     * down a column of failed formulas opens the second one at once instead of
+     * waiting out the delay again.
+     */
+    <TooltipProvider>
+      <div className="flex h-dvh flex-col">
+        <ModeloTools notebookOpen={openId !== null} runtime={runtime} />
+        <TabStrip
+          onActivate={(index) => updateTabs((c) => activateTab(c, index))}
+          onClose={(index) => updateTabs((c) => closeTab(c, index))}
+          onNewTab={() => updateTabs(newTab)}
+          state={tabState}
+          titleOf={titleOf}
+        />
+        <main className="min-h-0 flex-1">
+          {/*
+           * Home is stateless, so every home tab shares one panel. A notebook
+           * panel is keyed by its notebook, so closing another tab cannot
+           * remount it and lose the cursor.
+           */}
           <div
-            className="h-full overflow-y-auto"
-            hidden={notebook.id !== openId}
-            key={notebook.id}
+            className="h-full overflow-y-auto overscroll-contain"
+            hidden={openId !== null}
           >
-            <NotebookTab
-              defaults={defaults}
-              notebook={notebook}
-              onApplyScenario={(name) => run("apply_scenario", { name })}
-              onDelete={() =>
+            <HomeTab
+              onCreate={() =>
+                run("create_notebook", { name: "Untitled notebook" })
+              }
+              onDelete={(record) =>
                 setPendingDelete({
-                  id: notebook.id,
+                  id: record.id,
                   kind: "notebook",
-                  title: notebookTitle(notebook),
+                  title: notebookTitle(record),
                 })
               }
-              onDeleteScenario={(name) =>
-                setPendingDelete({ kind: "scenario", name })
-              }
-              onDuplicate={() => run("duplicate_notebook", { id: notebook.id })}
-              onSave={saveNotebook}
-              onSaveScenario={() => setScenarioDialogOpen(true)}
-              registerPort={registerPort}
+              onDuplicate={(id) => run("duplicate_notebook", { id })}
+              onImport={importFile}
+              onOpen={(id) => run("open_notebook", { id })}
+              workspace={workspace}
             />
           </div>
-        ))}
-      </main>
-
-      <Dialog onOpenChange={setScenarioDialogOpen} open={scenarioDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Save scenario</DialogTitle>
-            <DialogDescription>
-              Store the current input values under a name you can return to.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="scenario-name">Scenario name</Label>
-            <Input
-              autoFocus
-              id="scenario-name"
-              onChange={(e) => setScenarioName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && saveCurrentScenario()}
-              placeholder="Best case"
-              value={scenarioName}
-            />
-          </div>
-          <DialogFooter>
-            <Button
-              onClick={() => setScenarioDialogOpen(false)}
-              type="button"
-              variant="outline"
+          {openNotebooks.map((notebook) => (
+            <div
+              className="h-full overflow-y-auto overscroll-contain"
+              hidden={notebook.id !== openId}
+              key={notebook.id}
             >
-              Cancel
-            </Button>
-            <Button
-              disabled={!scenarioName.trim()}
-              onClick={saveCurrentScenario}
-              type="button"
-            >
-              Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              <NotebookTab
+                defaults={defaults}
+                notebook={notebook}
+                onApplyScenario={(name) => run("apply_scenario", { name })}
+                onDelete={() =>
+                  setPendingDelete({
+                    id: notebook.id,
+                    kind: "notebook",
+                    title: notebookTitle(notebook),
+                  })
+                }
+                onDeleteScenario={(name) =>
+                  setPendingDelete({ kind: "scenario", name })
+                }
+                onDuplicate={() =>
+                  run("duplicate_notebook", { id: notebook.id })
+                }
+                onSave={saveNotebook}
+                onSaveScenario={() => setScenarioDialogOpen(true)}
+                registerPort={registerPort}
+              />
+            </div>
+          ))}
+        </main>
 
-      <AlertDialog
-        onOpenChange={(isOpen) => !isOpen && setPendingDelete(null)}
-        open={pendingDelete !== null}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {pendingDelete?.kind === "notebook"
-                ? `Delete '${pendingDelete.title}'?`
-                : `Delete scenario '${pendingDelete?.name}'?`}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              This cannot be undone. Export first if you want to keep a copy.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete}>
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        <Dialog onOpenChange={setScenarioDialogOpen} open={scenarioDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Save scenario</DialogTitle>
+              <DialogDescription>
+                Store the current input values under a name you can return to.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="scenario-name">Scenario name</Label>
+              <Input
+                autoFocus
+                id="scenario-name"
+                onChange={(e) => setScenarioName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && saveCurrentScenario()}
+                placeholder="Best case"
+                value={scenarioName}
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                onClick={() => setScenarioDialogOpen(false)}
+                type="button"
+                variant="outline"
+              >
+                Cancel
+              </Button>
+              <Button
+                disabled={!scenarioName.trim()}
+                onClick={saveCurrentScenario}
+                type="button"
+              >
+                Save
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-      <Toaster position="bottom-right" />
-    </div>
+        <AlertDialog
+          onOpenChange={(isOpen) => !isOpen && setPendingDelete(null)}
+          open={pendingDelete !== null}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {pendingDelete?.kind === "notebook"
+                  ? `Delete '${pendingDelete.title}'?`
+                  : `Delete scenario '${pendingDelete?.name}'?`}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                This cannot be undone. Export first if you want to keep a copy.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={confirmDelete}>
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <Toaster position="bottom-right" />
+      </div>
+    </TooltipProvider>
   );
 }

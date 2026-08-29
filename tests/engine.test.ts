@@ -8,6 +8,13 @@ import {
   projectDocument,
 } from "../src/engine/projector";
 import { renameVariable } from "../src/engine/rename";
+import {
+  CURRENCIES,
+  currencyChoices,
+  isKnownUnit,
+  UNIT_GROUPS,
+  UNITS,
+} from "../src/engine/units";
 import type { ModeloBlock, ModeloDocument } from "../src/model";
 
 const document: ModeloDocument = [
@@ -699,5 +706,23 @@ describe("Modelo deterministic engine", () => {
     });
     expect(on.byId["toggle-id"]).toMatchObject({ formatted: "Yes", value: 1 });
     expect(on.byId["cost-id"]).toMatchObject({ status: "ok", value: 5000 });
+  });
+});
+
+describe("the format pickers", () => {
+  it("keeps a stored currency the list does not carry, and puts it first", () => {
+    // Offering only the known codes would silently rewrite a stored one.
+    expect(currencyChoices("NOK")[0]).toBe("NOK");
+    expect(currencyChoices("NOK")).toContain("EUR");
+    expect(currencyChoices("EUR")).toEqual([...CURRENCIES]);
+    expect(currencyChoices()).toEqual([...CURRENCIES]);
+    expect(currencyChoices("eur")).toEqual([...CURRENCIES]);
+  });
+
+  it("groups the units, so a long list stays navigable", () => {
+    expect(UNIT_GROUPS.length).toBeGreaterThan(1);
+    expect(UNITS).toContain("km");
+    expect(isKnownUnit("km")).toBe(true);
+    expect(isKnownUnit("parsec")).toBe(false);
   });
 });

@@ -62,15 +62,8 @@ export const updateBlockSchema = z.union([
 export type UpdateBlockArgs = z.infer<typeof updateBlockSchema>;
 
 const IDENTITY = ["name", "value"] as const;
-const DISPLAY = [
-  "format",
-  "currency",
-  "unit",
-  "decimals",
-  "min",
-  "max",
-  "step",
-] as const;
+const DISPLAY = ["format", "currency", "unit", "decimals"] as const;
+const BOUNDS = ["min", "max"] as const;
 
 /** Which fields each block type accepts. Adding a type is adding a row. */
 const ALLOWED_FIELDS: Record<string, ReadonlySet<string>> = {
@@ -79,11 +72,12 @@ const ALLOWED_FIELDS: Record<string, ReadonlySet<string>> = {
   checkListItem: new Set(["text"]),
   formula: new Set(["formula"]),
   heading: new Set(["text", "level"]),
-  number: new Set([...IDENTITY, ...DISPLAY]),
+  number: new Set([...IDENTITY, ...DISPLAY, ...BOUNDS]),
   numberedListItem: new Set(["text"]),
   paragraph: new Set(["text"]),
   select: new Set([...IDENTITY, "options"]),
-  slider: new Set([...IDENTITY, ...DISPLAY]),
+  // Only a slider steps: a number input takes any value.
+  slider: new Set([...IDENTITY, ...DISPLAY, ...BOUNDS, "step"]),
 };
 
 const NUMERIC_FIELDS = ["value", "min", "max", "step", "decimals"] as const;

@@ -69,7 +69,7 @@ describe("Modelo app smoke", () => {
   it("opens a notebook into the home tab", async () => {
     renderApp();
     await openNotebook("AE compensation & accelerator");
-    expect(await screen.findByDisplayValue("closed_arr")).toBeTruthy();
+    expect(await screen.findByDisplayValue("ClosedArr")).toBeTruthy();
     // The tab took the notebook, so home is no longer on screen.
     expect(screen.queryByRole("navigation", { name: "Notebooks" })).toBeNull();
   });
@@ -92,7 +92,7 @@ describe("Modelo app smoke", () => {
   it("gives every new tab a home, and keeps one tab open", async () => {
     renderApp();
     await openNotebook("AE compensation & accelerator");
-    expect(await screen.findByDisplayValue("closed_arr")).toBeTruthy();
+    expect(await screen.findByDisplayValue("ClosedArr")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "New tab" }));
     expect(
@@ -135,7 +135,7 @@ describe("Modelo app smoke", () => {
 
   it("restores the tabs named in the URL", async () => {
     renderApp("?tabs=home,sales-ae-comp-plan&tab=2");
-    expect(await screen.findByDisplayValue("closed_arr")).toBeTruthy();
+    expect(await screen.findByDisplayValue("ClosedArr")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Close Home" })).toBeTruthy();
     expect(screen.queryByRole("navigation", { name: "Notebooks" })).toBeNull();
   });
@@ -163,7 +163,7 @@ describe("Modelo app smoke", () => {
     ).toHaveLength(1);
   });
 
-  it("renders human config fields and the boolean toggle", async () => {
+  it("renders every model block as one line of name, control, and value", async () => {
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
@@ -177,7 +177,6 @@ describe("Modelo app smoke", () => {
                 format: "currency",
                 id: "number",
                 name: "price",
-                step: 1,
                 type: "number",
                 value: 12,
                 varId: "price-id",
@@ -221,102 +220,29 @@ describe("Modelo app smoke", () => {
     );
     renderApp();
     await openNotebook();
-    expect(await screen.findByDisplayValue("EUR")).toBeTruthy();
-    expect(screen.getByLabelText("Slider minimum")).toHaveProperty(
-      "value",
-      "0"
-    );
-    expect(screen.getByLabelText("Slider maximum")).toHaveProperty(
-      "value",
-      "100"
-    );
-    // The option list moved into the six-dot menu; the block shows the choice.
+
+    expect(
+      await screen.findByRole("spinbutton", { name: "price" })
+    ).toHaveProperty("value", "12");
+    expect(screen.getByLabelText("growth")).toBeTruthy();
     expect(
       screen.getByRole("combobox", { name: "tier" }).textContent
     ).toContain("Basic");
     expect(
       screen.getByRole("switch", { name: "hired" }).getAttribute("aria-checked")
     ).toBe("true");
-  });
 
-  it("keeps a stored currency the picker does not offer instead of resetting it", async () => {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        currency: "EUR",
-        locale: "en-US",
-        notebooks: [
-          {
-            blocks: [
-              {
-                currency: "NOK",
-                format: "currency",
-                id: "currency",
-                name: "currency",
-                step: 1,
-                type: "number",
-                value: 12,
-                varId: "currency-id",
-              },
-            ],
-            id: "formats",
-            scenarios: [],
-            updatedAt: new Date().toISOString(),
-          },
-        ],
-        version: 1,
-      })
-    );
-    renderApp();
-    await openNotebook();
-
-    const currency = await screen.findByLabelText("Currency code");
-    expect(currency.textContent).toContain("NOK");
-    fireEvent.click(currency);
-    const options = await screen.findAllByRole("option");
-    const offered = options.map((option) => option.textContent);
-    expect(offered).toContain("NOK");
-    expect(offered).toContain("EUR");
-  });
-
-  it("groups the unit picker so long unit lists stay navigable", async () => {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        currency: "EUR",
-        locale: "en-US",
-        notebooks: [
-          {
-            blocks: [
-              {
-                format: "unit",
-                id: "unit",
-                name: "distance",
-                step: 1,
-                type: "number",
-                unit: "km",
-                value: 5,
-                varId: "unit-id",
-              },
-            ],
-            id: "formats",
-            scenarios: [],
-            updatedAt: new Date().toISOString(),
-          },
-        ],
-        version: 1,
-      })
-    );
-    renderApp();
-    await openNotebook();
-
-    const unit = await screen.findByRole("combobox", { name: "Unit" });
-    expect(unit.textContent).toContain("km");
-    fireEvent.click(unit);
-    const groups = await screen.findAllByRole("group");
-    expect(groups.length).toBeGreaterThan(1);
-    const options = await screen.findAllByRole("option");
-    expect(options.map((option) => option.textContent)).toContain("km");
+    // Configuration lives behind the six dots, never in the block itself.
+    for (const label of [
+      "Format",
+      "Currency code",
+      "Decimals",
+      "Slider minimum",
+      "Slider maximum",
+      "Option 1 label",
+    ]) {
+      expect(screen.queryByLabelText(label)).toBeNull();
+    }
   });
 
   it("leaves a number input without bounds unbounded", async () => {
@@ -331,7 +257,6 @@ describe("Modelo app smoke", () => {
               {
                 id: "price",
                 name: "price",
-                step: 1,
                 type: "number",
                 value: 10,
                 varId: "price-id",
@@ -354,40 +279,6 @@ describe("Modelo app smoke", () => {
     expect(input.getAttribute("max")).toBeNull();
   });
 
-  it("does not render format controls on formula blocks", async () => {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        currency: "EUR",
-        locale: "es-ES",
-        notebooks: [
-          {
-            blocks: [
-              {
-                formula: "1 + 1",
-                id: "result",
-                name: "result",
-                type: "formula",
-                varId: "result-id",
-              },
-            ],
-            id: "formula",
-            scenarios: [],
-            updatedAt: new Date().toISOString(),
-          },
-        ],
-        version: 1,
-      })
-    );
-    renderApp();
-    await openNotebook();
-    expect(await screen.findByLabelText("result expression")).toBeTruthy();
-    expect(screen.queryByLabelText("Format")).toBeNull();
-    expect(screen.queryByLabelText("Currency code")).toBeNull();
-    expect(screen.queryByLabelText("Unit")).toBeNull();
-    expect(screen.queryByLabelText("Decimals")).toBeNull();
-  });
-
   it("renders, applies, and marks a saved scenario chip active", async () => {
     localStorage.setItem(
       STORAGE_KEY,
@@ -400,7 +291,6 @@ describe("Modelo app smoke", () => {
               {
                 id: "price",
                 name: "price",
-                step: 1,
                 type: "number",
                 value: 10,
                 varId: "price-id",

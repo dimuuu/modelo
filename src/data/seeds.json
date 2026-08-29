@@ -20,40 +20,37 @@
         "id": "sales-base-salary",
         "type": "number",
         "varId": "sales-base-salary-var",
-        "name": "base_salary",
+        "name": "BaseSalary",
         "value": 70000,
         "format": "currency",
         "currency": "EUR",
-        "min": 0,
-        "step": 1000
+        "min": 0
       },
       {
         "id": "sales-target-variable",
         "type": "number",
         "varId": "sales-target-variable-var",
-        "name": "target_variable_pay",
+        "name": "TargetVariablePay",
         "value": 70000,
         "format": "currency",
         "currency": "EUR",
-        "min": 0,
-        "step": 1000
+        "min": 0
       },
       {
         "id": "sales-annual-quota",
         "type": "number",
         "varId": "sales-annual-quota-var",
-        "name": "annual_quota",
+        "name": "AnnualQuota",
         "value": 700000,
         "format": "currency",
         "currency": "EUR",
-        "min": 1,
-        "step": 10000
+        "min": 1
       },
       {
         "id": "sales-closed-arr",
         "type": "slider",
         "varId": "sales-closed-arr-var",
-        "name": "closed_arr",
+        "name": "ClosedArr",
         "value": 875000,
         "format": "currency",
         "currency": "EUR",
@@ -65,46 +62,45 @@
         "id": "sales-accelerator",
         "type": "number",
         "varId": "sales-accelerator-var",
-        "name": "accelerator_multiplier",
+        "name": "AcceleratorMultiplier",
         "value": 1.5,
         "min": 1,
-        "max": 3,
-        "step": 0.1
+        "max": 3
       },
       {
         "id": "sales-ote",
         "type": "formula",
         "varId": "sales-ote-var",
-        "name": "on_target_earnings",
-        "formula": "base_salary + target_variable_pay"
+        "name": "OnTargetEarnings",
+        "formula": "BaseSalary + TargetVariablePay"
       },
       {
         "id": "sales-base-rate",
         "type": "formula",
         "varId": "sales-base-rate-var",
-        "name": "base_commission_rate",
-        "formula": "target_variable_pay / annual_quota"
+        "name": "BaseCommissionRate",
+        "formula": "TargetVariablePay / AnnualQuota"
       },
       {
         "id": "sales-attainment",
         "type": "formula",
         "varId": "sales-attainment-var",
-        "name": "quota_attainment",
-        "formula": "closed_arr / annual_quota"
+        "name": "QuotaAttainment",
+        "formula": "ClosedArr / AnnualQuota"
       },
       {
         "id": "sales-earned-commission",
         "type": "formula",
         "varId": "sales-earned-commission-var",
-        "name": "earned_commission",
-        "formula": "closed_arr <= annual_quota ? closed_arr * base_commission_rate : annual_quota * base_commission_rate + (closed_arr - annual_quota) * base_commission_rate * accelerator_multiplier"
+        "name": "EarnedCommission",
+        "formula": "ClosedArr <= AnnualQuota ? ClosedArr * BaseCommissionRate : AnnualQuota * BaseCommissionRate + (ClosedArr - AnnualQuota) * BaseCommissionRate * AcceleratorMultiplier"
       },
       {
         "id": "sales-total-comp",
         "type": "formula",
         "varId": "sales-total-comp-var",
-        "name": "total_cash_compensation",
-        "formula": "base_salary + earned_commission"
+        "name": "TotalCashCompensation",
+        "formula": "BaseSalary + EarnedCommission"
       },
       {
         "id": "sales-summary",
@@ -112,19 +108,19 @@
         "inline": [
           "At ",
           {
-            "name": "closed_arr",
+            "name": "ClosedArr",
             "type": "ref",
             "varId": "sales-closed-arr-var"
           },
           " of closed ARR, the AE reaches ",
           {
-            "name": "quota_attainment",
+            "name": "QuotaAttainment",
             "type": "ref",
             "varId": "sales-attainment-var"
           },
           " attainment and earns ",
           {
-            "name": "earned_commission",
+            "name": "EarnedCommission",
             "type": "ref",
             "varId": "sales-earned-commission-var"
           },
@@ -137,13 +133,13 @@
         "inline": [
           "Total annual cash compensation becomes ",
           {
-            "name": "total_cash_compensation",
+            "name": "TotalCashCompensation",
             "type": "ref",
             "varId": "sales-total-comp-var"
           },
           " versus OTE of ",
           {
-            "name": "on_target_earnings",
+            "name": "OnTargetEarnings",
             "type": "ref",
             "varId": "sales-ote-var"
           },
@@ -173,29 +169,27 @@
         "id": "founders-cash",
         "type": "number",
         "varId": "founders-cash-var",
-        "name": "cash_balance",
+        "name": "CashBalance",
         "value": 420000,
         "format": "currency",
         "currency": "EUR",
-        "min": 0,
-        "step": 10000
+        "min": 0
       },
       {
         "id": "founders-revenue",
         "type": "number",
         "varId": "founders-revenue-var",
-        "name": "monthly_revenue",
+        "name": "MonthlyRevenue",
         "value": 28000,
         "format": "currency",
         "currency": "EUR",
-        "min": 0,
-        "step": 1000
+        "min": 0
       },
       {
         "id": "founders-costs",
         "type": "slider",
         "varId": "founders-costs-var",
-        "name": "monthly_operating_costs",
+        "name": "MonthlyOperatingCosts",
         "value": 52000,
         "format": "currency",
         "currency": "EUR",
@@ -207,7 +201,7 @@
         "id": "founders-hire-choice",
         "type": "select",
         "varId": "founders-hire-choice-var",
-        "name": "hire_enabled",
+        "name": "HireEnabled",
         "value": 1,
         "options": [
           {
@@ -224,33 +218,32 @@
         "id": "founders-hire-cost",
         "type": "number",
         "varId": "founders-hire-cost-var",
-        "name": "hire_monthly_cost",
+        "name": "HireMonthlyCost",
         "value": 8500,
         "format": "currency",
         "currency": "EUR",
-        "min": 0,
-        "step": 500
+        "min": 0
       },
       {
         "id": "founders-total-costs",
         "type": "formula",
         "varId": "founders-total-costs-var",
-        "name": "total_monthly_costs",
-        "formula": "monthly_operating_costs + hire_enabled * hire_monthly_cost"
+        "name": "TotalMonthlyCosts",
+        "formula": "MonthlyOperatingCosts + HireEnabled * HireMonthlyCost"
       },
       {
         "id": "founders-net-burn",
         "type": "formula",
         "varId": "founders-net-burn-var",
-        "name": "monthly_net_burn",
-        "formula": "total_monthly_costs - monthly_revenue"
+        "name": "MonthlyNetBurn",
+        "formula": "TotalMonthlyCosts - MonthlyRevenue"
       },
       {
         "id": "founders-runway",
         "type": "formula",
         "varId": "founders-runway-var",
-        "name": "runway_months",
-        "formula": "cash_balance / max(monthly_net_burn, 1)"
+        "name": "RunwayMonths",
+        "formula": "CashBalance / max(MonthlyNetBurn, 1)"
       },
       {
         "id": "founders-summary",
@@ -258,19 +251,19 @@
         "inline": [
           "With monthly costs of ",
           {
-            "name": "total_monthly_costs",
+            "name": "TotalMonthlyCosts",
             "type": "ref",
             "varId": "founders-total-costs-var"
           },
           " and revenue of ",
           {
-            "name": "monthly_revenue",
+            "name": "MonthlyRevenue",
             "type": "ref",
             "varId": "founders-revenue-var"
           },
           ", net burn is ",
           {
-            "name": "monthly_net_burn",
+            "name": "MonthlyNetBurn",
             "type": "ref",
             "varId": "founders-net-burn-var"
           },
@@ -283,7 +276,7 @@
         "inline": [
           "The current cash balance funds approximately ",
           {
-            "name": "runway_months",
+            "name": "RunwayMonths",
             "type": "ref",
             "varId": "founders-runway-var"
           },
@@ -313,7 +306,7 @@
         "id": "valencia-rent",
         "type": "slider",
         "varId": "valencia-rent-var",
-        "name": "monthly_rent",
+        "name": "MonthlyRent",
         "value": 1450,
         "format": "currency",
         "currency": "EUR",
@@ -325,40 +318,37 @@
         "id": "valencia-price",
         "type": "number",
         "varId": "valencia-price-var",
-        "name": "purchase_price",
+        "name": "PurchasePrice",
         "value": 320000,
         "format": "currency",
         "currency": "EUR",
-        "min": 50000,
-        "step": 5000
+        "min": 50000
       },
       {
         "id": "valencia-down-payment",
         "type": "number",
         "varId": "valencia-down-payment-var",
-        "name": "down_payment",
+        "name": "DownPayment",
         "value": 64000,
         "format": "currency",
         "currency": "EUR",
-        "min": 0,
-        "step": 5000
+        "min": 0
       },
       {
         "id": "valencia-rate",
         "type": "number",
         "varId": "valencia-rate-var",
-        "name": "annual_interest_rate",
+        "name": "AnnualInterestRate",
         "value": 3.25,
         "format": "percent",
         "min": 0.1,
-        "max": 12,
-        "step": 0.05
+        "max": 12
       },
       {
         "id": "valencia-term",
         "type": "select",
         "varId": "valencia-term-var",
-        "name": "mortgage_years",
+        "name": "MortgageYears",
         "value": 30,
         "options": [
           {
@@ -379,87 +369,83 @@
         "id": "valencia-community-fees",
         "type": "number",
         "varId": "valencia-community-fees-var",
-        "name": "monthly_community_fees",
+        "name": "MonthlyCommunityFees",
         "value": 85,
         "format": "currency",
         "currency": "EUR",
-        "min": 0,
-        "step": 5
+        "min": 0
       },
       {
         "id": "valencia-ibi",
         "type": "number",
         "varId": "valencia-ibi-var",
-        "name": "annual_ibi",
+        "name": "AnnualIbi",
         "value": 620,
         "format": "currency",
         "currency": "EUR",
-        "min": 0,
-        "step": 20
+        "min": 0
       },
       {
         "id": "valencia-insurance",
         "type": "number",
         "varId": "valencia-insurance-var",
-        "name": "annual_home_insurance",
+        "name": "AnnualHomeInsurance",
         "value": 360,
         "format": "currency",
         "currency": "EUR",
-        "min": 0,
-        "step": 20
+        "min": 0
       },
       {
         "id": "valencia-maintenance-rate",
         "type": "number",
         "varId": "valencia-maintenance-rate-var",
-        "name": "annual_maintenance_rate",
+        "name": "AnnualMaintenanceRate",
         "value": 0.6,
         "format": "percent",
         "min": 0,
-        "max": 3,
-        "step": 0.1
+        "max": 3
       },
       {
         "id": "valencia-loan",
         "type": "formula",
         "varId": "valencia-loan-var",
-        "name": "loan_principal",
-        "formula": "purchase_price - down_payment"
+        "name": "LoanPrincipal",
+        "formula": "PurchasePrice - DownPayment"
       },
       {
         "id": "valencia-monthly-rate",
         "type": "formula",
         "varId": "valencia-monthly-rate-var",
-        "name": "monthly_interest_rate",
-        "formula": "annual_interest_rate / 12"
+        "name": "MonthlyInterestRate",
+        "formula": "AnnualInterestRate / 12"
       },
       {
         "id": "valencia-payment-count",
         "type": "formula",
         "varId": "valencia-payment-count-var",
-        "name": "mortgage_payment_count",
-        "formula": "mortgage_years * 12"
+        "name": "MortgagePaymentCount",
+        "formula": "MortgageYears * 12"
       },
       {
         "id": "valencia-mortgage-payment",
         "type": "formula",
         "varId": "valencia-mortgage-payment-var",
-        "name": "monthly_mortgage_payment",
-        "formula": "loan_principal * (monthly_interest_rate * (1 + monthly_interest_rate) ^ mortgage_payment_count) / ((1 + monthly_interest_rate) ^ mortgage_payment_count - 1)"
+        "name": "MonthlyMortgagePayment",
+        "formula": "LoanPrincipal * (MonthlyInterestRate * (1 + MonthlyInterestRate) ^ MortgagePaymentCount) / ((1 + MonthlyInterestRate) ^ MortgagePaymentCount - 1)"
       },
       {
         "id": "valencia-owner-cost",
         "type": "formula",
         "varId": "valencia-owner-cost-var",
-        "name": "monthly_owner_cost",
-        "formula": "monthly_mortgage_payment + monthly_community_fees + annual_ibi / 12 + annual_home_insurance / 12 + purchase_price * annual_maintenance_rate / 12"
+        "name": "MonthlyOwnerCost",
+        "formula": "MonthlyMortgagePayment + MonthlyCommunityFees + AnnualIbi / 12 + AnnualHomeInsurance / 12 + PurchasePrice * AnnualMaintenanceRate / 12"
       },
       {
         "id": "valencia-difference",
         "type": "formula",
         "varId": "valencia-difference-var",
-        "name": "buying_monthly_premium",
-        "formula": "monthly_owner_cost - monthly_rent"
+        "name": "BuyingMonthlyPremium",
+        "formula": "MonthlyOwnerCost - MonthlyRent"
       },
       {
         "id": "valencia-summary",
@@ -467,19 +453,19 @@
         "inline": [
           "For a ",
           {
-            "name": "purchase_price",
+            "name": "PurchasePrice",
             "type": "ref",
             "varId": "valencia-price-var"
           },
           " home, the estimated monthly owner cost is ",
           {
-            "name": "monthly_owner_cost",
+            "name": "MonthlyOwnerCost",
             "type": "ref",
             "varId": "valencia-owner-cost-var"
           },
           ", compared with rent of ",
           {
-            "name": "monthly_rent",
+            "name": "MonthlyRent",
             "type": "ref",
             "varId": "valencia-rent-var"
           },
@@ -492,7 +478,7 @@
         "inline": [
           "On a cash-flow basis, buying costs ",
           {
-            "name": "buying_monthly_premium",
+            "name": "BuyingMonthlyPremium",
             "type": "ref",
             "varId": "valencia-difference-var"
           },
@@ -644,65 +630,59 @@
         "id": "gallery-plain-number",
         "type": "number",
         "varId": "gallery-plain-number-var",
-        "name": "plain_number",
+        "name": "PlainNumber",
         "value": 42,
-        "min": 0,
-        "step": 1
+        "min": 0
       },
       {
         "id": "gallery-money-eur",
         "type": "number",
         "varId": "gallery-money-eur-var",
-        "name": "money_eur",
+        "name": "MoneyEur",
         "value": 1234.5,
         "format": "currency",
-        "currency": "EUR",
-        "step": 100
+        "currency": "EUR"
       },
       {
         "id": "gallery-money-usd",
         "type": "number",
         "varId": "gallery-money-usd-var",
-        "name": "money_usd",
+        "name": "MoneyUsd",
         "value": 99,
         "format": "currency",
         "currency": "USD",
-        "decimals": 2,
-        "step": 1
+        "decimals": 2
       },
       {
         "id": "gallery-growth-rate",
         "type": "number",
         "varId": "gallery-growth-rate-var",
-        "name": "growth_rate",
+        "name": "GrowthRate",
         "value": 12.5,
-        "format": "percent",
-        "step": 0.5
+        "format": "percent"
       },
       {
         "id": "gallery-distance",
         "type": "number",
         "varId": "gallery-distance-var",
-        "name": "distance_km",
+        "name": "DistanceKm",
         "value": 12.5,
         "format": "unit",
-        "unit": "km",
-        "step": 0.5
+        "unit": "km"
       },
       {
         "id": "gallery-precise",
         "type": "number",
         "varId": "gallery-precise-var",
-        "name": "precise_number",
+        "name": "PreciseNumber",
         "value": 3.14159,
-        "decimals": 4,
-        "step": 0.0001
+        "decimals": 4
       },
       {
         "id": "gallery-slider-basic",
         "type": "slider",
         "varId": "gallery-slider-basic-var",
-        "name": "slider_basic",
+        "name": "SliderBasic",
         "value": 60,
         "min": 0,
         "max": 100,
@@ -712,7 +692,7 @@
         "id": "gallery-slider-money",
         "type": "slider",
         "varId": "gallery-slider-money-var",
-        "name": "slider_money",
+        "name": "SliderMoney",
         "value": 180000,
         "format": "currency",
         "currency": "EUR",
@@ -724,7 +704,7 @@
         "id": "gallery-slider-percent",
         "type": "slider",
         "varId": "gallery-slider-percent-var",
-        "name": "slider_percent",
+        "name": "SliderPercent",
         "value": 35,
         "format": "percent",
         "min": 0,
@@ -735,7 +715,7 @@
         "id": "gallery-select",
         "type": "select",
         "varId": "gallery-select-var",
-        "name": "plan_tier",
+        "name": "PlanTier",
         "value": 1,
         "options": [
           {
@@ -756,7 +736,7 @@
         "id": "gallery-boolean",
         "type": "boolean",
         "varId": "gallery-boolean-var",
-        "name": "feature_on",
+        "name": "FeatureOn",
         "value": 1
       },
       {
@@ -776,36 +756,36 @@
         "id": "gallery-sum",
         "type": "formula",
         "varId": "gallery-sum-var",
-        "name": "sum",
-        "formula": "plain_number + slider_basic"
+        "name": "Sum",
+        "formula": "PlainNumber + SliderBasic"
       },
       {
         "id": "gallery-tier",
         "type": "formula",
         "varId": "gallery-tier-var",
-        "name": "tier_multiplier",
-        "formula": "plan_tier + 1"
+        "name": "TierMultiplier",
+        "formula": "PlanTier + 1"
       },
       {
         "id": "gallery-gated",
         "type": "formula",
         "varId": "gallery-gated-var",
-        "name": "gated_total",
-        "formula": "feature_on ? money_eur * 2 : money_eur"
+        "name": "GatedTotal",
+        "formula": "FeatureOn ? MoneyEur * 2 : MoneyEur"
       },
       {
         "id": "gallery-long-name",
         "type": "formula",
         "varId": "gallery-long-name-var",
-        "name": "a_deliberately_long_variable_name_for_layout",
-        "formula": "money_eur"
+        "name": "ADeliberatelyLongVariableNameForLayout",
+        "formula": "MoneyEur"
       },
       {
         "id": "gallery-long-formula",
         "type": "formula",
         "varId": "gallery-long-formula-var",
-        "name": "long_expression",
-        "formula": "money_eur * (1 + growth_rate) * tier_multiplier + slider_money * slider_percent - money_eur * slider_percent / 2"
+        "name": "LongExpression",
+        "formula": "MoneyEur * (1 + GrowthRate) * TierMultiplier + SliderMoney * SliderPercent - MoneyEur * SliderPercent / 2"
       },
       {
         "id": "gallery-errors-heading",
@@ -824,15 +804,15 @@
         "id": "gallery-missing",
         "type": "formula",
         "varId": "gallery-missing-var",
-        "name": "missing_dependency",
-        "formula": "money_eur / unknown_variable"
+        "name": "MissingDependency",
+        "formula": "MoneyEur / UnknownVariable"
       },
       {
         "id": "gallery-broken",
         "type": "formula",
         "varId": "gallery-broken-var",
-        "name": "broken_syntax",
-        "formula": "money_eur * * 2"
+        "name": "BrokenSyntax",
+        "formula": "MoneyEur * * 2"
       },
       {
         "id": "gallery-refs-heading",
@@ -846,19 +826,19 @@
         "inline": [
           "A chip per status. This one is fine: ",
           {
-            "name": "sum",
+            "name": "Sum",
             "type": "ref",
             "varId": "gallery-sum-var"
           },
           ". So is this currency chip: ",
           {
-            "name": "money_eur",
+            "name": "MoneyEur",
             "type": "ref",
             "varId": "gallery-money-eur-var"
           },
           ", and this percent chip: ",
           {
-            "name": "growth_rate",
+            "name": "GrowthRate",
             "type": "ref",
             "varId": "gallery-growth-rate-var"
           },
@@ -871,13 +851,13 @@
         "inline": [
           "These two must read as failures, never as zero: ",
           {
-            "name": "missing_dependency",
+            "name": "MissingDependency",
             "type": "ref",
             "varId": "gallery-missing-var"
           },
           " and ",
           {
-            "name": "broken_syntax",
+            "name": "BrokenSyntax",
             "type": "ref",
             "varId": "gallery-broken-var"
           },
@@ -890,7 +870,7 @@
         "inline": [
           "A reference inside a list item: ",
           {
-            "name": "gated_total",
+            "name": "GatedTotal",
             "type": "ref",
             "varId": "gallery-gated-var"
           },

@@ -61,15 +61,17 @@ export function NotebookTab({
           {notebook.scenarios.map((scenario) => {
             const active = activeScenario === scenario.name;
             return (
+              // Either half presses the whole pill, because the pill is the
+              // thing the eye reads as one control.
               <span
-                className={`inline-flex shrink-0 items-center rounded-full border text-[13px] ${
+                className={`inline-flex shrink-0 items-center rounded-full border text-[13px] transition-[background-color,border-color,transform] duration-150 ease-out has-[button:active]:scale-[0.97] ${
                   active ? "border-primary bg-accent" : "bg-muted/60"
                 }`}
                 key={scenario.id}
               >
                 <button
                   aria-pressed={active}
-                  className="py-1 pr-1 pl-3"
+                  className="focus-visible:ring-ring/50 rounded-l-full py-1 pr-1 pl-3 outline-none focus-visible:ring-3"
                   onClick={() => onApplyScenario(scenario.name)}
                   type="button"
                 >
@@ -77,7 +79,7 @@ export function NotebookTab({
                 </button>
                 <button
                   aria-label={`Delete scenario ${scenario.name}`}
-                  className="text-muted-foreground py-1 pr-2.5 pl-1"
+                  className="text-muted-foreground focus-visible:ring-ring/50 rounded-r-full py-1 pr-2.5 pl-1 outline-none focus-visible:ring-3"
                   onClick={() => onDeleteScenario(scenario.name)}
                   type="button"
                 >
@@ -87,7 +89,7 @@ export function NotebookTab({
             );
           })}
           <button
-            className="text-muted-foreground hover:bg-muted/60 inline-flex shrink-0 items-center gap-1 rounded-full border border-dashed py-1 pr-3 pl-2.5 text-[13px]"
+            className="text-muted-foreground hover:bg-muted/60 focus-visible:ring-ring/50 inline-flex shrink-0 items-center gap-1 rounded-full border border-dashed py-1 pr-3 pl-2.5 text-[13px] transition-[background-color,transform] duration-150 ease-out outline-none focus-visible:ring-3 active:scale-[0.97]"
             onClick={onSaveScenario}
             type="button"
           >

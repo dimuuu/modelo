@@ -50,7 +50,7 @@ Every tool argument is parsed with zod before it reaches the document. A failure
 Try these against the AE compensation notebook:
 
 1. "List the notebooks, open the AE compensation notebook, then summarize its model and any errors."
-2. "Set `closed_arr` to 1,050,000 and tell me the new earned commission and total cash compensation."
+2. "Set `ClosedArr` to 1,050,000 and tell me the new earned commission and total cash compensation."
 3. "Insert a formula named `variable_pay_multiple` equal to `earned_commission / target_variable_pay`, then add a paragraph that references it."
 
 To build a new model, ask the agent to write a section rather than to dump variables. An `@name` in a paragraph becomes a live reference.

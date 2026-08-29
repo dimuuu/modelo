@@ -61,7 +61,7 @@ export const INPUT_PROP_DEFAULTS = {
   decimals: DECIMALS_AUTO,
   format: "number",
   locale: "",
-  name: "variable",
+  name: "Variable",
   unit: "",
   value: 0,
   varId: "",
@@ -69,7 +69,7 @@ export const INPUT_PROP_DEFAULTS = {
 
 export const FORMULA_PROP_DEFAULTS = {
   formula: "1 + 1",
-  name: "result",
+  name: "Result",
   varId: "",
 } as const;
 
@@ -216,7 +216,7 @@ export function newVariableProps(
   const id = makeId();
   const suffix = id.slice(0, 4);
   const base = {
-    name: `variable_${suffix}`,
+    name: `Variable${suffix}`,
     varId: id,
   };
   switch (kind) {
@@ -240,11 +240,11 @@ export function newVariableProps(
       return {
         ...base,
         formula: FORMULA_PROP_DEFAULTS.formula,
-        name: `result_${suffix}`,
+        name: `Result${suffix}`,
       };
     }
     default: {
-      return { ...base, step: 1, value: 0 };
+      return { ...base, value: 0 };
     }
   }
 }

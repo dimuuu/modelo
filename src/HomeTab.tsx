@@ -81,15 +81,20 @@ export function HomeTab({
 
       <nav
         aria-label="Notebooks"
-        className="bg-background mx-auto w-full max-w-[860px] flex-1 overflow-y-auto rounded-t-2xl border border-b-0 px-2 py-2"
+        className="bg-background mx-auto w-full max-w-[860px] flex-1 overflow-y-auto overscroll-contain rounded-t-2xl border border-b-0 px-2 py-2"
       >
         {workspace.notebooks.map((notebook) => (
           <div
-            className="hover:bg-muted/50 grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 rounded-lg px-3"
+            className="hover:bg-muted/50 relative grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 rounded-lg px-3 transition-colors duration-150 ease-out"
             key={notebook.id}
           >
+            {/*
+             * The row highlights on hover, so the whole row must open the
+             * notebook. The pseudo-element stretches this one button over the
+             * row, which keeps the shared column grid and the accessible name.
+             */}
             <button
-              className="min-w-0 truncate py-2.5 text-left text-[15px]"
+              className="focus-visible:ring-ring/50 min-w-0 truncate rounded-lg py-2.5 text-left text-[15px] outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:ring-3"
               onClick={() => onOpen(notebook.id)}
               type="button"
             >
@@ -98,11 +103,14 @@ export function HomeTab({
             <span className="text-muted-foreground text-[13px]">
               {updatedLabel(notebook.updatedAt)}
             </span>
-            <NotebookMenu
-              notebook={notebook}
-              onDelete={() => onDelete(notebook)}
-              onDuplicate={() => onDuplicate(notebook.id)}
-            />
+            {/* Above the stretched hit area, so the menu still takes a click. */}
+            <div className="relative">
+              <NotebookMenu
+                notebook={notebook}
+                onDelete={() => onDelete(notebook)}
+                onDuplicate={() => onDuplicate(notebook.id)}
+              />
+            </div>
           </div>
         ))}
         {workspace.notebooks.length === 0 ? (

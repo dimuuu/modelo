@@ -20,15 +20,39 @@
   --bn-colors-selected-text: var(--primary-foreground);
   --bn-colors-selected-background: var(--primary);
   --bn-colors-border: var(--border);
+  --bn-colors-highlights-red-text: var(--destructive);
   --bn-font-family: var(--font-sans);
 }
 
 /*
- * BlockNote hard-codes Inter on its prose surface, with no theme variable to
- * bind. Two classes outrank its one.
+ * BlockNote hard-codes its own prose font, with no theme variable to bind.
+ * Two classes outrank its one.
  */
 .bn-container .bn-default-styles {
   font-family: var(--font-sans);
+}
+
+/*
+ * The notebook title is the one piece of display type in the app. Pinning
+ * Inter's optical size axis to its maximum gives the Display cut: tighter
+ * spacing and smaller apertures, which large type wants.
+ */
+.bn-container .bn-editor h1 {
+  font-variation-settings: "opsz" 32;
+}
+
+/*
+ * The side menu is a Mantine group with no gap, because BlockNote's own two
+ * buttons sat flush. This app's buttons need the room.
+ *
+ * The margins line the two buttons up with the block they belong to. They are
+ * margins and not a transform: floating-ui positions this element by writing
+ * an inline `transform`, and a rule here would lose to it.
+ */
+.bn-container .bn-side-menu {
+  --group-gap: 2px;
+  margin-top: 3px;
+  margin-left: -6px;
 }
 
 @media (max-width: 700px) {
