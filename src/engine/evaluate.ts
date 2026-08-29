@@ -179,7 +179,7 @@ function missingResult(
   variable: ProjectedVariable,
   missing: string[]
 ): EvaluatedVariable {
-  const names = [...new Set(missing)].sort();
+  const names = [...new Set(missing)].toSorted();
   return {
     ...variable,
     error: `Missing variable${names.length === 1 ? "" : "s"}: ${names.join(", ")}`,
@@ -229,8 +229,8 @@ function inspectFormula(
       };
     }
     return {
-      dependencies: [...dependencies].sort(),
-      missing: [...missing].sort(),
+      dependencies: [...dependencies].toSorted(),
+      missing: [...missing].toSorted(),
       node,
     };
   } catch (error) {
@@ -284,11 +284,10 @@ export function evaluateModel(
       if (Number.isFinite(variable.value)) {
         try {
           quantities[variable.varId] = inputQuantity(variable, defaults);
+          const booleanLabel = variable.value ? "Yes" : "No";
           const formatted =
             variable.inputType === "boolean"
-              ? (variable.value
-                ? "Yes"
-                : "No")
+              ? booleanLabel
               : formatValue(
                   formatKind(variable) === "percent"
                     ? variable.value / 100
@@ -308,6 +307,7 @@ export function evaluateModel(
       }
     } else {
       const inspected = inspectFormula(variable, model);
+      const compiled = inspected.node;
       if (inspected.error) {
         result = errorResult(variable, inspected.error);
       } else if (inspected.missing.length > 0) {
@@ -330,9 +330,9 @@ export function evaluateModel(
           result = missingResult(variable, inheritedMissing);
         } else if (dependencyError) {
           result = errorResult(variable, dependencyError);
-        } else {
+        } else if (compiled) {
           try {
-            const value = inspected.node!.compile().evaluate(scope);
+            const value = compiled.compile().evaluate(scope);
             if (isUnit(value)) {
               const cancelledCurrency = (value.units as UnitPart[]).some(
                 ({ unit }) => unit.base?.key?.startsWith("money_")
@@ -356,21 +356,19 @@ export function evaluateModel(
                   value: normalized,
                 };
               }
+            } else if (typeof value === "number" && Number.isFinite(value)) {
+              quantities[variable.varId] = value;
+              result = {
+                ...variable,
+                formatted: formatValue(value, undefined, defaults),
+                status: "ok",
+                value,
+              };
             } else {
-              if (typeof value === "number" && Number.isFinite(value)) {
-                quantities[variable.varId] = value;
-                result = {
-                  ...variable,
-                  formatted: formatValue(value, undefined, defaults),
-                  status: "ok",
-                  value,
-                };
-              } else {
-                result = errorResult(
-                  variable,
-                  "Formula must return a finite number"
-                );
-              }
+              result = errorResult(
+                variable,
+                "Formula must return a finite number"
+              );
             }
           } catch (error) {
             result = errorResult(
@@ -378,6 +376,8 @@ export function evaluateModel(
               error instanceof Error ? error.message : String(error)
             );
           }
+        } else {
+          result = errorResult(variable, "Formula could not be parsed");
         }
       }
     }

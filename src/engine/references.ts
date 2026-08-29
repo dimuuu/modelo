@@ -34,6 +34,25 @@ function containsInlineRef(value: unknown, varId: string): boolean {
   );
 }
 
+/** Resolves a name, a varId, or either, against a projected model. */
+function findCandidate(
+  model: ReturnType<typeof projectDocument>,
+  query: string | ReferenceQuery
+): ProjectedVariable | undefined {
+  if (typeof query === "string") {
+    return model.variables.find(
+      (variable) => variable.name === query || variable.varId === query
+    );
+  }
+  if (query.varId) {
+    return model.byId[query.varId];
+  }
+  if (query.name) {
+    return model.byId[model.idByName[query.name]];
+  }
+  return undefined;
+}
+
 function resolveVariable(
   document: ModeloDocument,
   query: string | ReferenceQuery
@@ -42,16 +61,7 @@ function resolveVariable(
   model: ReturnType<typeof projectDocument>;
 } {
   const model = projectDocument(document);
-  const candidate =
-    typeof query === "string"
-      ? model.variables.find(
-          (variable) => variable.name === query || variable.varId === query
-        )
-      : query.varId
-        ? model.byId[query.varId]
-        : query.name
-          ? model.byId[model.idByName[query.name]]
-          : undefined;
+  const candidate = findCandidate(model, query);
   if (!candidate) {
     const identifier =
       typeof query === "string" ? query : (query.varId ?? query.name ?? "");

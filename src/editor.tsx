@@ -9,6 +9,7 @@ import {
 } from "@blocknote/react";
 import { XIcon } from "lucide-react";
 import { createContext, useContext, useId } from "react";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,7 @@ import {
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+
 import { renameVariable } from "./engine/rename";
 import { CURRENCIES, UNIT_GROUPS, UNITS } from "./engine/units";
 import type { EvaluationResult } from "./model";
@@ -107,7 +109,7 @@ function Field({
   return (
     <div className={`flex min-w-0 flex-col gap-1 ${className ?? ""}`}>
       <Label
-        className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase"
+        className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase"
         htmlFor={id}
       >
         {caption}
@@ -115,6 +117,21 @@ function Field({
       {children(id)}
     </div>
   );
+}
+
+/** What a model block shows: the evaluated value, or the raw prop until then. */
+function renderValue(
+  variable: EvaluationResult["byId"][string] | undefined,
+  fallback: number | undefined,
+  boolean: boolean
+): string | number {
+  if (boolean) {
+    if (variable?.status === "ok") {
+      return variable.value ? "Yes" : "No";
+    }
+    return variable?.formatted ?? (fallback ? "Yes" : "No");
+  }
+  return variable?.formatted ?? fallback ?? "missing";
 }
 
 function Value({
@@ -128,17 +145,11 @@ function Value({
 }) {
   const model = useContext(ModelContext);
   const variable = model?.byId[varId];
-  const rendered =
-    boolean && variable?.status === "ok"
-      ? (variable.value
-        ? "Yes"
-        : "No")
-      : (variable?.formatted ??
-        (boolean ? (fallback ? "Yes" : "No") : (fallback ?? "missing")));
+  const rendered = renderValue(variable, fallback, boolean);
   const failed = variable?.status === "error" || variable?.status === "missing";
   return (
     <span
-      className={`shrink-0 font-semibold text-sm tabular-nums whitespace-nowrap ${
+      className={`shrink-0 text-sm font-semibold whitespace-nowrap tabular-nums ${
         failed ? "text-destructive" : "text-foreground"
       }`}
     >
@@ -151,7 +162,7 @@ function VariableName({ block, editor }: any) {
   return (
     <Input
       aria-label="Variable name"
-      className="h-6 w-36 border-transparent bg-transparent px-1.5 text-right font-mono text-[11px] text-muted-foreground shadow-none"
+      className="text-muted-foreground h-6 w-36 border-transparent bg-transparent px-1.5 text-right font-mono text-[11px] shadow-none"
       defaultValue={block.props.name}
       onBlur={(event) => {
         const nextName = event.currentTarget.value.trim();
@@ -169,7 +180,7 @@ function VariableName({ block, editor }: any) {
           );
         } catch (error) {
           event.currentTarget.value = block.props.name;
-          window.alert(
+          toast.error(
             error instanceof Error ? error.message : "Could not rename variable"
           );
         }
@@ -182,7 +193,7 @@ function VariableName({ block, editor }: any) {
 function BlockHeader({ block, editor }: any) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <strong className="truncate font-semibold text-sm">
+      <strong className="truncate text-sm font-semibold">
         {block.props.label}
       </strong>
       <VariableName block={block} editor={editor} />
@@ -327,9 +338,7 @@ function FormatFields({ block, editor, includeStep = false }: any) {
             }}
             placeholder="Auto"
             type="number"
-            value={
-              block.props.decimals < 0 ? "" : block.props.decimals
-            }
+            value={block.props.decimals < 0 ? "" : block.props.decimals}
           />
         )}
       </Field>
@@ -363,8 +372,10 @@ function SliderFields({ block, editor }: any) {
       updateProps(editor, block, { step: next });
       return;
     }
-    const min = key === "min" ? Math.min(next, block.props.max) : block.props.min;
-    const max = key === "max" ? Math.max(next, block.props.min) : block.props.max;
+    const min =
+      key === "min" ? Math.min(next, block.props.max) : block.props.min;
+    const max =
+      key === "max" ? Math.max(next, block.props.min) : block.props.max;
     updateProps(editor, block, {
       max,
       min,
@@ -482,8 +493,8 @@ function ModelBlock({
 }) {
   return (
     <Card
-      className={`my-1.5 gap-3 rounded-lg bg-card px-4 py-3 shadow-none ${
-        accent ? "border-l-2 border-l-primary" : ""
+      className={`bg-card my-1.5 gap-3 rounded-lg px-4 py-3 shadow-none ${
+        accent ? "border-l-primary border-l-2" : ""
       }`}
     >
       {children}
@@ -685,6 +696,23 @@ const FormulaBlock = createReactBlockSpec(
   }
 );
 
+/** The live value chip an `@name` reference renders as inside prose. */
+function VariableRefChip({ label, varId }: { label: string; varId: string }) {
+  const model = useContext(ModelContext);
+  const variable = model?.byId[varId];
+  const failed =
+    !variable || variable.status === "error" || variable.status === "missing";
+  return (
+    <Badge
+      className="mx-px rounded-md px-1.5 py-0 align-baseline text-[0.92em] font-semibold tabular-nums"
+      title={label || variable?.name || "Missing variable"}
+      variant={failed ? "destructive" : "secondary"}
+    >
+      {variable?.formatted ?? "missing"}
+    </Badge>
+  );
+}
+
 const VariableRef = createReactInlineContentSpec(
   {
     content: "none",
@@ -692,23 +720,12 @@ const VariableRef = createReactInlineContentSpec(
     type: "variableRef",
   },
   {
-    render: ({ inlineContent }) => {
-      const model = useContext(ModelContext);
-      const variable = model?.byId[inlineContent.props.varId];
-      const failed =
-        !variable || variable.status === "error" || variable.status === "missing";
-      return (
-        <Badge
-          className="mx-px rounded-md px-1.5 py-0 align-baseline font-semibold text-[0.92em] tabular-nums"
-          title={
-            inlineContent.props.label || variable?.name || "Missing variable"
-          }
-          variant={failed ? "destructive" : "secondary"}
-        >
-          {variable?.formatted ?? "missing"}
-        </Badge>
-      );
-    },
+    render: ({ inlineContent }) => (
+      <VariableRefChip
+        label={inlineContent.props.label}
+        varId={inlineContent.props.varId}
+      />
+    ),
   }
 );
 

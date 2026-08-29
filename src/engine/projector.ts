@@ -36,7 +36,7 @@ export class DuplicateVariableIdError extends ModelValidationError {
   }
 }
 
-const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/u;
 const inputTypes = new Set([
   "modelVariable",
   "variable",
@@ -80,6 +80,27 @@ function validateDecimals(
   return decimals as number;
 }
 
+/** Boolean inputs project to 0 or 1, every other input keeps its number. */
+function inputValue(type: string, value: number): number {
+  if (type !== "boolean") {
+    return value;
+  }
+  return value ? 1 : 0;
+}
+
+/** The narrowed input kind a block type projects to, if it names one. */
+function inputTypeOf(
+  type: string
+): "number" | "slider" | "select" | "boolean" | undefined {
+  if (type === "boolean") {
+    return "boolean";
+  }
+  if (type === "number" || type === "slider" || type === "select") {
+    return type;
+  }
+  return undefined;
+}
+
 function visit(blocks: ModeloDocument, output: ProjectedVariable[]): void {
   for (const block of blocks) {
     const props = block.props as
@@ -97,19 +118,14 @@ function visit(blocks: ModeloDocument, output: ProjectedVariable[]): void {
         currency: props.currency,
         decimals: validateDecimals(props.decimals, props.name),
         format: props.format,
-        inputType:
-          block.type === "boolean"
-            ? "boolean"
-            : (["number", "slider", "select"].includes(block.type)
-              ? (block.type as "number" | "slider" | "select")
-              : undefined),
+        inputType: inputTypeOf(block.type),
         kind: "input",
         locale: props.locale,
         max: props.max,
         min: props.min,
         name: props.name as string,
         unit: props.unit,
-        value: block.type === "boolean" ? (props.value ? 1 : 0) : props.value,
+        value: inputValue(block.type, props.value),
         varId: props.varId,
       } satisfies ProjectedInput);
     } else if (formulaTypes.has(block.type)) {

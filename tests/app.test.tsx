@@ -151,9 +151,8 @@ describe("Modelo app smoke", () => {
     const currency = await screen.findByLabelText("Currency code");
     expect(currency.textContent).toContain("NOK");
     fireEvent.click(currency);
-    expect(
-      (await screen.findAllByRole("option")).map((option) => option.textContent)
-    ).toEqual(
+    const options = await screen.findAllByRole("option");
+    expect(options.map((option) => option.textContent)).toEqual(
       expect.arrayContaining([
         "EUR",
         "USD",
@@ -180,13 +179,7 @@ describe("Modelo app smoke", () => {
         (group) =>
           group.querySelector('[data-slot="select-label"]')?.textContent
       )
-    ).toEqual([
-      "Length",
-      "Mass",
-      "Time",
-      "Area",
-      "Volume",
-    ]);
+    ).toEqual(["Length", "Mass", "Time", "Area", "Volume"]);
   });
 
   it("does not render format controls on formula blocks", async () => {

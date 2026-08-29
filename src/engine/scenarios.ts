@@ -1,5 +1,13 @@
 import type { ModeloBlock, ModeloDocument } from "../model";
 
+/** Boolean inputs persist as 0 or 1, every other input keeps its number. */
+function inputValue(type: string, value: number): number {
+  if (type !== "boolean") {
+    return value;
+  }
+  return value ? 1 : 0;
+}
+
 export const MAX_SCENARIOS = 8;
 export const SCENARIO_INPUT_TYPES = new Set([
   "modelVariable",
@@ -45,7 +53,7 @@ export function snapshotInputs(
       typeof value === "number" &&
       Number.isFinite(value)
     ) {
-      values[varId] = block.type === "boolean" ? (value ? 1 : 0) : value;
+      values[varId] = inputValue(block.type, value);
     }
   });
   return values;
@@ -78,7 +86,7 @@ export function applyScenarioValues(
         ...block,
         props: {
           ...block.props,
-          value: block.type === "boolean" ? (requested ? 1 : 0) : requested,
+          value: inputValue(block.type, requested),
         },
         ...(Array.isArray(block.children) ? { children } : {}),
       } as ModeloBlock;

@@ -652,7 +652,7 @@ describe("Modelo deterministic engine", () => {
           type: "number",
         },
       ])
-    ).toThrow(/decimals/);
+    ).toThrow(/decimals/u);
   });
 
   it("projects boolean toggles as numeric inputs and formats Yes/No", () => {

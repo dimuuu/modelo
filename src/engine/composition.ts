@@ -29,20 +29,23 @@ const VARIABLE_TYPES = new Set([
 
 function countInlineRefs(value: unknown): number {
   if (Array.isArray(value)) {
-    return value.reduce((total, item) => total + countInlineRefs(item), 0);
+    let total = 0;
+    for (const item of value) {
+      total += countInlineRefs(item);
+    }
+    return total;
   }
   if (!value || typeof value !== "object") {
     return 0;
   }
   const node = value as Record<string, unknown>;
-  return (
-    (node.type === "variableRef" || node.type === "ref" ? 1 : 0) +
-    Object.entries(node).reduce(
-      (total, [key, item]) =>
-        key === "type" ? total : total + countInlineRefs(item),
-      0
-    )
-  );
+  let total = node.type === "variableRef" || node.type === "ref" ? 1 : 0;
+  for (const [key, item] of Object.entries(node)) {
+    if (key !== "type") {
+      total += countInlineRefs(item);
+    }
+  }
+  return total;
 }
 
 export function getComposition(document: ModeloDocument): Composition {

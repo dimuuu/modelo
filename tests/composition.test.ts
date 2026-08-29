@@ -99,7 +99,7 @@ describe("write_section block builder", () => {
         ],
       },
       { cost: "cost-id" },
-      () => `id-${++next}`
+      () => `id-${(next += 1)}`
     );
 
     expect(blocks.map((block) => block.type)).toEqual([
@@ -150,7 +150,7 @@ describe("write_section block builder", () => {
         inputs: [{ kind: "boolean", name: "hired", value: 2 }],
       },
       {},
-      () => `bool-${++next}`
+      () => `bool-${(next += 1)}`
     );
     expect(blocks[2]).toMatchObject({
       props: { name: "hired", value: 1 },

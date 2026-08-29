@@ -80,9 +80,49 @@ import "./blocknote-theme.css";
 
 const uid = () => crypto.randomUUID();
 const ok = (data: unknown = {}) => ({ data, ok: true });
+/**
+ * A WebMCP tool failure. `useModeloTools` serialises the public fields into
+ * the `{ ok: false, error: { code, message, details? } }` contract.
+ */
+class ModeloToolError extends Error {
+  readonly code: string;
+  readonly details?: unknown;
+
+  constructor(code: string, message: string, details?: unknown) {
+    super(message);
+    this.name = "ModeloToolError";
+    this.code = code;
+    this.details = details;
+  }
+}
+
 const fault = (code: string, message: string, details?: unknown): never => {
-  throw { code, details, message };
+  throw new ModeloToolError(code, message, details);
 };
+
+/** The block new content is appended after. A document always has one. */
+function lastBlock(editor: ModeloEditor) {
+  const block = editor.document.at(-1);
+  if (!block) {
+    throw new ModeloToolError(
+      "EMPTY_DOCUMENT",
+      "The notebook has no blocks to append after."
+    );
+  }
+  return block;
+}
+
+/** The anchor id a following section inserts after. */
+function lastId(blocks: { id: string }[]): string {
+  const block = blocks.at(-1);
+  if (!block) {
+    throw new ModeloToolError(
+      "EMPTY_SECTION",
+      "The section produced no blocks."
+    );
+  }
+  return block.id;
+}
 
 function download(filename: string, value: unknown) {
   const url = URL.createObjectURL(
@@ -101,13 +141,15 @@ function textContent(block: any): string {
     return "";
   }
   return block.content
-    .map((node: any) =>
-      node.type === "text"
-        ? node.text
-        : (node.type === "variableRef"
-          ? `@${node.props?.label || node.props?.varId}`
-          : "")
-    )
+    .map((node: any) => {
+      if (node.type === "text") {
+        return node.text;
+      }
+      if (node.type === "variableRef") {
+        return `@${node.props?.label || node.props?.varId}`;
+      }
+      return "";
+    })
     .join("");
 }
 
@@ -115,7 +157,7 @@ function unknownReferences(
   text: string,
   idByName: Record<string, string>
 ): string[] {
-  return [...text.matchAll(/@([A-Za-z_][A-Za-z0-9_]*)/g)]
+  return [...text.matchAll(/@(?<name>[A-Za-z_][A-Za-z0-9_]*)/gu)]
     .map((match) => match[1])
     .filter(
       (name, index, names) =>
@@ -259,10 +301,13 @@ function NotebookEditor({
   onSave: (blocks: unknown[]) => void;
   expose: (editor: ModeloEditor | null) => void;
 }) {
-  const initial = useMemo(() => {
-    const blocks = portableToEditorBlocks(notebook.blocks as any[]);
-    return blocks.length ? blocks : [{ content: "", type: "paragraph" }];
-  }, [notebook.id]);
+  // BlockNote reads initialContent once, when it creates the editor, and owns
+  // the document from then on. NotebookEditor is keyed by notebook id, so
+  // switching notebooks remounts with fresh content.
+  const converted = portableToEditorBlocks(notebook.blocks as any[]);
+  const initial = converted.length
+    ? converted
+    : [{ content: "", type: "paragraph" }];
   const editor = useCreateBlockNote({
     initialContent: initial as any,
     schema: modeloSchema,
@@ -275,17 +320,22 @@ function NotebookEditor({
     return () => expose(null);
   }, [editor, expose]);
 
+  const formatDefaults = useMemo(
+    () => ({ currency: workspace.currency, locale: workspace.locale }),
+    [workspace.currency, workspace.locale]
+  );
+
   const model = useMemo(() => {
     try {
-      return evaluateModel(projectDocument(documentBlocks), workspace);
+      return evaluateModel(projectDocument(documentBlocks), formatDefaults);
     } catch (error) {
       console.warn("Model projection error", error);
       return { byId: {}, byName: {}, variables: [] };
     }
-  }, [documentBlocks, workspace.currency, workspace.locale]);
+  }, [documentBlocks, formatDefaults]);
 
   const slashItems = useCallback(
-    async (query: string) => {
+    (query: string) => {
       const insert = (
         kind: "number" | "slider" | "select" | "boolean" | "formula"
       ) => ({
@@ -315,32 +365,36 @@ function NotebookEditor({
         insert("formula"),
       ];
       const q = query.toLowerCase();
-      return all.filter(
-        (item) =>
-          item.title.toLowerCase().includes(q) ||
-          item.subtext?.toLowerCase().includes(q)
+      return Promise.resolve(
+        all.filter(
+          (item) =>
+            item.title.toLowerCase().includes(q) ||
+            item.subtext?.toLowerCase().includes(q)
+        )
       );
     },
     [editor]
   );
 
   const refItems = useCallback(
-    async (query: string) =>
-      model.variables
-        .filter((variable) =>
-          variable.name.toLowerCase().includes(query.toLowerCase())
-        )
-        .map((variable) => ({
-          onItemClick: () =>
-            editor.insertInlineContent([
-              {
-                props: { label: variable.name, varId: variable.varId },
-                type: "variableRef",
-              },
-            ] as any),
-          subtext: variable.formatted,
-          title: variable.name,
-        })),
+    (query: string) =>
+      Promise.resolve(
+        model.variables
+          .filter((variable) =>
+            variable.name.toLowerCase().includes(query.toLowerCase())
+          )
+          .map((variable) => ({
+            onItemClick: () =>
+              editor.insertInlineContent([
+                {
+                  props: { label: variable.name, varId: variable.varId },
+                  type: "variableRef",
+                },
+              ] as any),
+            subtext: variable.formatted,
+            title: variable.name,
+          }))
+      ),
     [editor, model]
   );
 
@@ -376,7 +430,9 @@ export default function App() {
   const [scenarioDialogOpen, setScenarioDialogOpen] = useState(false);
   const [scenarioName, setScenarioName] = useState("");
   const [pendingDelete, setPendingDelete] = useState<
-    { kind: "notebook"; id: string; title: string } | { kind: "scenario"; name: string } | null
+    | { kind: "notebook"; id: string; title: string }
+    | { kind: "scenario"; name: string }
+    | null
   >(null);
   const editorRef = useRef<ModeloEditor | null>(null);
   const workspaceRef = useRef(workspace);
@@ -582,8 +638,9 @@ export default function App() {
               const scenario = (currentNotebook().scenarios ?? []).find(
                 (item) => item.name === name
               );
-              if (!scenario)
-                {return fault("NOT_FOUND", `Scenario '${name}' not found.`);}
+              if (!scenario) {
+                return fault("NOT_FOUND", `Scenario '${name}' not found.`);
+              }
               const before = JSON.parse(JSON.stringify(editor.document));
               const model = projectDocument(before);
               const inputIds = new Set(
@@ -611,8 +668,9 @@ export default function App() {
                 !(notebook.scenarios ?? []).some(
                   (scenario) => scenario.name === name
                 )
-              )
-                {fault("NOT_FOUND", `Scenario '${name}' not found.`);}
+              ) {
+                fault("NOT_FOUND", `Scenario '${name}' not found.`);
+              }
               updateWorkspace((current) => ({
                 ...current,
                 notebooks: current.notebooks.map((item) =>
@@ -644,8 +702,8 @@ export default function App() {
               return ok({
                 blocks: blocks.map((block, i) => ({
                   ...slimBlock(block),
-                  previousId: blocks[i - 1]?.id ?? null,
                   nextId: blocks[i + 1]?.id ?? null,
+                  previousId: blocks[i - 1]?.id ?? null,
                 })),
                 composition: getComposition(blocks as any),
                 notebook: {
@@ -679,19 +737,24 @@ export default function App() {
                   )
                 ) {
                   ensureUniqueName(block.name);
-                  if (seen.has(block.name))
-                    {fault(
+                  if (seen.has(block.name)) {
+                    fault(
                       "DUPLICATE_VARIABLE_NAME",
                       `Variable '${block.name}' already exists.`
-                    );}
+                    );
+                  }
                   seen.add(block.name);
                   const varId = block.varId || uid();
                   idByName[block.name] = varId;
                   next.varId = varId;
-                  if (block.type === "boolean")
-                    {next.value = block.value ? 1 : 0;}
-                  if (block.currency && !block.format) {next.format = "currency";}
-                  else if (block.unit && !block.format) {next.format = "unit";}
+                  if (block.type === "boolean") {
+                    next.value = block.value ? 1 : 0;
+                  }
+                  if (block.currency && !block.format) {
+                    next.format = "currency";
+                  } else if (block.unit && !block.format) {
+                    next.format = "unit";
+                  }
                 }
                 return next;
               });
@@ -702,24 +765,25 @@ export default function App() {
               );
               const converted = portableToEditorBlocks(portable, idByName);
               editor.transact(() => {
-                if (referenceBlockId)
-                  {editor.insertBlocks(
+                if (referenceBlockId) {
+                  editor.insertBlocks(
                     converted as any,
                     referenceBlockId,
                     placement ?? "after"
-                  );}
-                else if (
+                  );
+                } else if (
                   editor.document.length === 1 &&
                   editor.document[0].type === "paragraph" &&
                   textContent(editor.document[0]) === ""
-                )
-                  {editor.replaceBlocks(editor.document, converted as any);}
-                else
-                  {editor.insertBlocks(
+                ) {
+                  editor.replaceBlocks(editor.document, converted as any);
+                } else {
+                  editor.insertBlocks(
                     converted as any,
-                    editor.document.at(-1)!,
+                    lastBlock(editor),
                     "after"
-                  );}
+                  );
+                }
               });
               return ok(
                 mutationResult(
@@ -737,10 +801,13 @@ export default function App() {
               const editor = currentEditor();
               const model = projectDocument(editor.document as any);
               const varId = model.idByName[variable];
-              if (!varId)
-                {fault("NOT_FOUND", `Variable '${variable}' not found.`);}
+              if (!varId) {
+                fault("NOT_FOUND", `Variable '${variable}' not found.`);
+              }
               const block = editor.getBlock(blockId) as any;
-              if (!block) {fault("NOT_FOUND", `Block '${blockId}' not found.`);}
+              if (!block) {
+                fault("NOT_FOUND", `Block '${blockId}' not found.`);
+              }
               const before = JSON.parse(JSON.stringify(editor.document));
               const content = [
                 ...(block.content ?? []),
@@ -772,10 +839,11 @@ export default function App() {
             removeBlocks: ({ ids }) => {
               const editor = currentEditor();
               const missing = ids.filter((id) => !editor.getBlock(id));
-              if (missing.length)
-                {fault("NOT_FOUND", "Some blocks do not exist.", {
+              if (missing.length) {
+                fault("NOT_FOUND", "Some blocks do not exist.", {
                   ids: missing,
-                });}
+                });
+              }
               const before = JSON.parse(JSON.stringify(editor.document));
               editor.transact(() => editor.removeBlocks(ids));
               return ok(
@@ -800,20 +868,22 @@ export default function App() {
               }
               const model = projectDocument(editor.document as any);
               const variable = model.byId[references.varId];
-              if (!variable || variable.kind !== "input")
-                {fault(
+              if (!variable || variable.kind !== "input") {
+                fault(
                   "READ_ONLY",
                   "Only input variables can be removed with remove_variable."
-                );}
+                );
+              }
               if (
                 !args.force &&
                 (references.formulas.length || references.paragraphs.length)
-              )
-                {fault(
+              ) {
+                fault(
                   "VARIABLE_REFERENCED",
                   `Variable '${references.name}' is still referenced.`,
                   references
-                );}
+                );
+              }
               const before = JSON.parse(JSON.stringify(editor.document));
               editor.transact(() => editor.removeBlocks([variable.blockId]));
               return ok(
@@ -837,16 +907,17 @@ export default function App() {
             },
             replaceParagraph: ({ id, text }) => {
               const editor = currentEditor();
-              if (!editor.getBlock(id))
-                {fault("NOT_FOUND", `Block '${id}' not found.`);}
+              if (!editor.getBlock(id)) {
+                fault("NOT_FOUND", `Block '${id}' not found.`);
+              }
               const before = JSON.parse(JSON.stringify(editor.document));
               const model = projectDocument(editor.document as any);
-              const {content} = portableToEditorBlocks([
+              const [{ content }] = portableToEditorBlocks([
                 {
-                  type: "paragraph",
                   inline: inlineContentFromText(text, model.idByName),
+                  type: "paragraph",
                 },
-              ])[0];
+              ]);
               editor.transact(() =>
                 editor.updateBlock(id, { content, type: "paragraph" } as any)
               );
@@ -860,36 +931,40 @@ export default function App() {
               );
             },
             saveScenario: ({ name, values }) => {
-              const scenarioName = name.trim();
-              if (!scenarioName)
-                {fault("INVALID_NAME", "Scenario name cannot be empty.");}
+              const trimmedName = name.trim();
+              if (!trimmedName) {
+                fault("INVALID_NAME", "Scenario name cannot be empty.");
+              }
               const editor = currentEditor();
               const notebook = currentNotebook();
               const warnings: string[] = [];
               let savedValues: Record<string, number>;
-              if (values === undefined)
-                {savedValues = snapshotInputs(editor.document as any);}
-              else {
+              if (values === undefined) {
+                savedValues = snapshotInputs(editor.document as any);
+              } else {
                 savedValues = Object.create(null);
                 const model = projectDocument(editor.document as any);
                 for (const [variableName, value] of Object.entries(values)) {
-                  if (!Number.isFinite(value))
-                    {fault(
+                  if (!Number.isFinite(value)) {
+                    fault(
                       "INVALID_VALUE",
                       `Value for '${variableName}' must be finite.`
-                    );}
+                    );
+                  }
                   const variable = model.byId[model.idByName[variableName]];
-                  if (!variable || variable.kind !== "input")
-                    {warnings.push(`Unknown input '${variableName}' skipped.`);}
-                  else {savedValues[variable.varId] = value;}
+                  if (!variable || variable.kind !== "input") {
+                    warnings.push(`Unknown input '${variableName}' skipped.`);
+                  } else {
+                    savedValues[variable.varId] = value;
+                  }
                 }
               }
               const existing = (notebook.scenarios ?? []).find(
-                (scenario) => scenario.name === scenarioName
+                (scenario) => scenario.name === trimmedName
               );
               const scenario = {
                 id: existing?.id ?? uid(),
-                name: scenarioName,
+                name: trimmedName,
                 values: savedValues,
               };
               let scenarios: Scenario[];
@@ -917,31 +992,35 @@ export default function App() {
             },
             setVariable: ({ name, value }) => {
               const editor = currentEditor();
-              if (!Number.isFinite(value))
-                {fault("INVALID_VALUE", "Value must be finite.");}
+              if (!Number.isFinite(value)) {
+                fault("INVALID_VALUE", "Value must be finite.");
+              }
               const model = projectDocument(editor.document as any);
               const variable = model.byId[model.idByName[name]];
-              if (!variable)
-                {fault("NOT_FOUND", `Variable '${name}' not found.`);}
+              if (!variable) {
+                fault("NOT_FOUND", `Variable '${name}' not found.`);
+              }
               const block = editor.getBlock(variable.blockId) as any;
               if (
                 !["number", "slider", "select", "boolean"].includes(block.type)
-              )
-                {fault(
+              ) {
+                fault(
                   "READ_ONLY",
                   "Formula values are computed and cannot be set."
-                );}
-              const nextValue =
-                block.type === "boolean"
-                  ? (value
-                    ? 1
-                    : 0)
-                  : (block.type === "slider"
-                    ? Math.min(
-                        block.props.max,
-                        Math.max(block.props.min, value)
-                      )
-                    : value);
+                );
+              }
+              const nextValue = (() => {
+                if (block.type === "boolean") {
+                  return value ? 1 : 0;
+                }
+                if (block.type === "slider") {
+                  return Math.min(
+                    block.props.max,
+                    Math.max(block.props.min, value)
+                  );
+                }
+                return value;
+              })();
               const before = JSON.parse(JSON.stringify(editor.document));
               editor.transact(() =>
                 editor.updateBlock(block, { props: { value: nextValue } })
@@ -972,11 +1051,12 @@ export default function App() {
               const editor = currentEditor();
               const before = JSON.parse(JSON.stringify(editor.document));
               const ids = blocks.map(({ id }) => id);
-              if (new Set(ids).size !== ids.length)
-                {fault(
+              if (new Set(ids).size !== ids.length) {
+                fault(
                   "INVALID_UPDATE",
                   "Each block may appear only once in update_blocks."
-                );}
+                );
+              }
               const updates = blocks.map((args) => prepareUpdate(editor, args));
               const renamed = new Set<string>();
               for (const update of updates) {
@@ -984,17 +1064,20 @@ export default function App() {
                   update.nextName &&
                   update.nextName !== update.block.props?.name
                 ) {
-                  if (renamed.has(update.nextName))
-                    {fault(
+                  if (renamed.has(update.nextName)) {
+                    fault(
                       "DUPLICATE_VARIABLE_NAME",
                       `Variable '${update.nextName}' already exists.`
-                    );}
+                    );
+                  }
                   renamed.add(update.nextName);
                 }
               }
-              editor.transact(() =>
-                updates.forEach((update) => applyUpdate(editor, update))
-              );
+              editor.transact(() => {
+                for (const update of updates) {
+                  applyUpdate(editor, update);
+                }
+              });
               const { errors, changed } = mutationResult(
                 before,
                 editor.document as any[],
@@ -1013,11 +1096,12 @@ export default function App() {
               const seen = new Set<string>();
               for (const name of names) {
                 ensureUniqueName(name);
-                if (seen.has(name))
-                  {fault(
+                if (seen.has(name)) {
+                  fault(
                     "DUPLICATE_VARIABLE_NAME",
                     `Variable '${name}' already exists.`
-                  );}
+                  );
+                }
                 seen.add(name);
               }
               const portable = buildSectionBlocks(args, model.idByName, uid);
@@ -1037,33 +1121,35 @@ export default function App() {
                 args.referenceBlockId,
                 args.placement
               );
-              if (args.dry_run)
-                {return ok(
+              if (args.dry_run) {
+                return ok(
                   mutationResult(before, preview, workspaceRef.current, {
                     dry_run: true,
                     insertedBlockIds: converted.map((block) => block.id),
                     warnings,
                   })
-                );}
+                );
+              }
               editor.transact(() => {
-                if (args.referenceBlockId)
-                  {editor.insertBlocks(
+                if (args.referenceBlockId) {
+                  editor.insertBlocks(
                     converted as any,
                     args.referenceBlockId,
                     args.placement ?? "after"
-                  );}
-                else if (
+                  );
+                } else if (
                   editor.document.length === 1 &&
                   editor.document[0].type === "paragraph" &&
                   textContent(editor.document[0]) === ""
-                )
-                  {editor.replaceBlocks(editor.document, converted as any);}
-                else
-                  {editor.insertBlocks(
+                ) {
+                  editor.replaceBlocks(editor.document, converted as any);
+                } else {
+                  editor.insertBlocks(
                     converted as any,
-                    editor.document.at(-1)!,
+                    lastBlock(editor),
                     "after"
-                  );}
+                  );
+                }
               });
               return ok(
                 mutationResult(
@@ -1090,11 +1176,12 @@ export default function App() {
                 if (
                   section.referenceBlockId &&
                   !editor.getBlock(section.referenceBlockId)
-                )
-                  {fault(
+                ) {
+                  fault(
                     "NOT_FOUND",
                     `Block '${section.referenceBlockId}' not found.`
-                  );}
+                  );
+                }
                 for (const item of [
                   ...(section.inputs ?? []),
                   ...(section.formulas ?? []),
@@ -1102,17 +1189,20 @@ export default function App() {
                   if (
                     Object.hasOwn(idByName, item.name) ||
                     seen.has(item.name)
-                  )
-                    {fault(
+                  ) {
+                    fault(
                       "DUPLICATE_VARIABLE_NAME",
                       `Variable '${item.name}' already exists.`
-                    );}
+                    );
+                  }
                   seen.add(item.name);
                 }
                 const portable = buildSectionBlocks(section, idByName, uid);
-                for (const block of portable)
-                  {if (block.props?.name)
-                    idByName[block.props.name] = block.props.varId;}
+                for (const block of portable) {
+                  if (block.props?.name) {
+                    idByName[block.props.name] = block.props.varId;
+                  }
+                }
                 return { portable, section };
               });
               const warnings = prepared.flatMap(({ section }) =>
@@ -1141,11 +1231,9 @@ export default function App() {
                   if (
                     section.referenceBlockId &&
                     (section.placement ?? "after") === "after"
-                  )
-                    {afterAnchors.set(
-                      section.referenceBlockId,
-                      blocks.at(-1)!.id
-                    );}
+                  ) {
+                    afterAnchors.set(section.referenceBlockId, lastId(blocks));
+                  }
                 }
                 const ids = converted.flatMap((entry) =>
                   entry.blocks.map((block) => block.id)
@@ -1172,23 +1260,25 @@ export default function App() {
                       anchor,
                       section.placement ?? "after"
                     );
-                    if ((section.placement ?? "after") === "after")
-                      {afterAnchors.set(
+                    if ((section.placement ?? "after") === "after") {
+                      afterAnchors.set(
                         section.referenceBlockId,
-                        blocks.at(-1)!.id
-                      );}
+                        lastId(blocks)
+                      );
+                    }
                   } else if (
                     editor.document.length === 1 &&
                     editor.document[0].type === "paragraph" &&
                     textContent(editor.document[0]) === ""
-                  )
-                    {editor.replaceBlocks(editor.document, blocks as any);}
-                  else
-                    {editor.insertBlocks(
+                  ) {
+                    editor.replaceBlocks(editor.document, blocks as any);
+                  } else {
+                    editor.insertBlocks(
                       blocks as any,
-                      editor.document.at(-1)!,
+                      lastBlock(editor),
                       "after"
-                    );}
+                    );
+                  }
                 }
               });
               const ids = converted.flatMap((entry) =>
@@ -1319,13 +1409,14 @@ export default function App() {
     }
   };
 
-  const activeScenario =
-    openNotebook && editorRef.current
-      ? matchingScenarioName(
-          editorRef.current.document as any,
-          openNotebook.scenarios ?? []
-        )
-      : null;
+  // Derived from the persisted snapshot rather than editorRef, because a ref
+  // read during render does not re-run when the document changes.
+  const activeScenario = openNotebook
+    ? matchingScenarioName(
+        portableToEditorBlocks(openNotebook.blocks as any[]) as any,
+        openNotebook.scenarios ?? []
+      )
+    : null;
 
   const saveCurrentScenario = () => {
     const name = scenarioName.trim();
@@ -1346,9 +1437,9 @@ export default function App() {
 
   return (
     <div className="grid min-h-screen grid-cols-1 md:grid-cols-[250px_minmax(0,1fr)]">
-      <aside className="flex max-h-[42vh] flex-col gap-3 border-b bg-sidebar p-3 md:sticky md:top-0 md:h-screen md:max-h-none md:border-r md:border-b-0">
+      <aside className="bg-sidebar flex max-h-[42vh] flex-col gap-3 border-b p-3 md:sticky md:top-0 md:h-screen md:max-h-none md:border-r md:border-b-0">
         <Button
-          className="justify-start px-2 font-bold text-[19px] tracking-tight"
+          className="justify-start px-2 text-[19px] font-bold tracking-tight"
           onClick={() => setOpenId(null)}
           size="lg"
           type="button"
@@ -1356,7 +1447,11 @@ export default function App() {
         >
           Modelo
         </Button>
-        <Button className="justify-start" onClick={createNotebook} type="button">
+        <Button
+          className="justify-start"
+          onClick={createNotebook}
+          type="button"
+        >
           <PlusIcon />
           New notebook
         </Button>
@@ -1379,7 +1474,7 @@ export default function App() {
               </Button>
               <Button
                 aria-label={`Duplicate ${notebook.title}`}
-                className="text-muted-foreground opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
+                className="text-muted-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
                 onClick={() => adapter.workspace.duplicate({ id: notebook.id })}
                 size="icon-sm"
                 title="Duplicate"
@@ -1390,7 +1485,7 @@ export default function App() {
               </Button>
               <Button
                 aria-label={`Delete ${notebook.title}`}
-                className="text-muted-foreground opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
+                className="text-muted-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
                 onClick={() =>
                   setPendingDelete({
                     id: notebook.id,
@@ -1422,7 +1517,7 @@ export default function App() {
             {webmcp.supported ? "WebMCP ready" : "WebMCP unavailable"}
           </Badge>
           <Button
-            className="justify-start px-1 font-normal text-muted-foreground"
+            className="text-muted-foreground justify-start px-1 font-normal"
             onClick={() => download("modelo-workspace.json", workspace)}
             size="sm"
             type="button"
@@ -1432,7 +1527,7 @@ export default function App() {
             Export all
           </Button>
           <Label
-            className="flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-1 font-normal text-muted-foreground text-sm hover:bg-accent"
+            className="text-muted-foreground hover:bg-accent flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-1 text-sm font-normal"
             htmlFor="import-workspace"
           >
             <UploadIcon className="size-3.5" />
@@ -1501,9 +1596,12 @@ export default function App() {
                     </button>
                     <button
                       aria-label={`Delete scenario ${scenario.name}`}
-                      className="py-1 pr-2.5 pl-1 text-muted-foreground"
+                      className="text-muted-foreground py-1 pr-2.5 pl-1"
                       onClick={() =>
-                        setPendingDelete({ kind: "scenario", name: scenario.name })
+                        setPendingDelete({
+                          kind: "scenario",
+                          name: scenario.name,
+                        })
                       }
                       type="button"
                     >
@@ -1513,7 +1611,7 @@ export default function App() {
                 );
               })}
               <Button
-                className="shrink-0 text-muted-foreground"
+                className="text-muted-foreground shrink-0"
                 onClick={() => setScenarioDialogOpen(true)}
                 size="sm"
                 type="button"
@@ -1532,10 +1630,10 @@ export default function App() {
           </>
         ) : (
           <section className="mx-auto max-w-[680px] px-9 py-[17vh]">
-            <p className="font-bold text-[11px] uppercase tracking-[0.12em]">
+            <p className="text-[11px] font-bold tracking-[0.12em] uppercase">
               Workspace
             </p>
-            <h1 className="my-2 font-semibold text-4xl tracking-[-0.035em]">
+            <h1 className="my-2 text-4xl font-semibold tracking-[-0.035em]">
               Notebook and model, together.
             </h1>
             <p className="text-muted-foreground leading-relaxed">
@@ -1609,7 +1707,9 @@ export default function App() {
                 if (pendingDelete?.kind === "notebook") {
                   adapter.workspace.delete({ id: pendingDelete.id });
                 } else if (pendingDelete?.kind === "scenario") {
-                  adapter.notebook?.deleteScenario({ name: pendingDelete.name });
+                  adapter.notebook?.deleteScenario({
+                    name: pendingDelete.name,
+                  });
                 }
                 setPendingDelete(null);
               }}

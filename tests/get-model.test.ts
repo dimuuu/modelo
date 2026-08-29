@@ -134,6 +134,6 @@ describe("findReferences", () => {
   it("rejects unknown variables", () => {
     expect(() =>
       findReferences(referencedDocument as any, { name: "missing" })
-    ).toThrow(/Variable not found/);
+    ).toThrow(/Variable not found/u);
   });
 });

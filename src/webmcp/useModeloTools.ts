@@ -119,10 +119,10 @@ const inputProperties = {
   name: nameProperty,
   value: { type: "number" },
   ...displayProperties,
-  min: { type: "number" },
   max: { type: "number" },
-  step: { type: "number" },
+  min: { type: "number" },
   options: optionProperty,
+  step: { type: "number" },
 } as const;
 
 const insertBlocksSchema = {

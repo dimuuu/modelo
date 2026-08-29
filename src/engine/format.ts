@@ -66,12 +66,12 @@ export function formatValue(
     return "Error: non-finite result";
   }
   const format = normalize(input, defaults);
-  const sourceFormat =
-    typeof input === "string"
-      ? input
-      : (input && "format" in input
-        ? input.format
-        : undefined);
+  let sourceFormat: FormatKind | NumberFormat | undefined;
+  if (typeof input === "string") {
+    sourceFormat = input;
+  } else if (input && "format" in input) {
+    sourceFormat = input.format;
+  }
   const decimals =
     typeof input === "object" &&
     input &&
@@ -87,11 +87,10 @@ export function formatValue(
       style: "percent",
     }).format(value);
   }
+  const defaultCurrencyDigits = Number.isInteger(value) ? 0 : 2;
   const currencyDigits =
     format.style === "currency" && decimals === undefined
-      ? (Number.isInteger(value)
-        ? 0
-        : 2)
+      ? defaultCurrencyDigits
       : undefined;
   const digitOptions = {
     maximumFractionDigits:
