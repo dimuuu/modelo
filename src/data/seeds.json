@@ -1,0 +1,782 @@
+[
+  {
+    "id": "sales-ae-comp-plan",
+    "description": "Model quota attainment, accelerated commission, and total cash compensation for an account executive.",
+    "blocks": [
+      {
+        "id": "sales-heading",
+        "type": "heading",
+        "level": 1,
+        "inline": ["AE compensation & accelerator"]
+      },
+      {
+        "id": "sales-intro",
+        "type": "paragraph",
+        "inline": [
+          "A compact annual plan for one account executive. Move closed ARR, or apply a scenario, and watch the narrative and the pay update together."
+        ]
+      },
+      {
+        "id": "sales-plan-heading",
+        "type": "heading",
+        "level": 2,
+        "inline": ["The plan"]
+      },
+      {
+        "id": "sales-plan-intro",
+        "type": "paragraph",
+        "inline": [
+          "Base salary and target variable pay are fixed by the plan. Together they make on-target earnings of ",
+          {
+            "name": "OnTargetEarnings",
+            "type": "ref",
+            "varId": "sales-ote-var"
+          },
+          ". The quota is what the AE must close to earn all of it."
+        ]
+      },
+      {
+        "id": "sales-base-salary",
+        "type": "number",
+        "varId": "sales-base-salary-var",
+        "name": "BaseSalary",
+        "value": 70000,
+        "format": "currency",
+        "currency": "EUR",
+        "min": 0
+      },
+      {
+        "id": "sales-target-variable",
+        "type": "number",
+        "varId": "sales-target-variable-var",
+        "name": "TargetVariablePay",
+        "value": 70000,
+        "format": "currency",
+        "currency": "EUR",
+        "min": 0
+      },
+      {
+        "id": "sales-annual-quota",
+        "type": "number",
+        "varId": "sales-annual-quota-var",
+        "name": "AnnualQuota",
+        "value": 700000,
+        "format": "currency",
+        "currency": "EUR",
+        "min": 1
+      },
+      {
+        "id": "sales-attainment-heading",
+        "type": "heading",
+        "level": 2,
+        "inline": ["Attainment"]
+      },
+      {
+        "id": "sales-attainment-intro",
+        "type": "paragraph",
+        "inline": [
+          "Closed ARR is the one assumption to move. Up to quota, every euro pays the base rate. Above it, every extra euro pays the base rate times the accelerator."
+        ]
+      },
+      {
+        "id": "sales-closed-arr",
+        "type": "slider",
+        "varId": "sales-closed-arr-var",
+        "name": "ClosedArr",
+        "value": 875000,
+        "format": "currency",
+        "currency": "EUR",
+        "min": 0,
+        "max": 1400000,
+        "step": 25000
+      },
+      {
+        "id": "sales-accelerator",
+        "type": "number",
+        "varId": "sales-accelerator-var",
+        "name": "AcceleratorMultiplier",
+        "value": 1.5,
+        "min": 1,
+        "max": 3
+      },
+      {
+        "id": "sales-earnings-heading",
+        "type": "heading",
+        "level": 2,
+        "inline": ["What the AE earns"]
+      },
+      {
+        "id": "sales-earnings-intro",
+        "type": "paragraph",
+        "inline": [
+          "The base commission rate is ",
+          {
+            "name": "BaseCommissionRate",
+            "type": "ref",
+            "varId": "sales-base-rate-var"
+          },
+          " per euro closed. Attainment is closed ARR over quota, as a multiple."
+        ]
+      },
+      {
+        "id": "sales-ote",
+        "type": "formula",
+        "varId": "sales-ote-var",
+        "name": "OnTargetEarnings",
+        "formula": "BaseSalary + TargetVariablePay"
+      },
+      {
+        "id": "sales-base-rate",
+        "type": "formula",
+        "varId": "sales-base-rate-var",
+        "name": "BaseCommissionRate",
+        "formula": "TargetVariablePay / AnnualQuota"
+      },
+      {
+        "id": "sales-attainment",
+        "type": "formula",
+        "varId": "sales-attainment-var",
+        "name": "QuotaAttainment",
+        "formula": "ClosedArr / AnnualQuota"
+      },
+      {
+        "id": "sales-earned-commission",
+        "type": "formula",
+        "varId": "sales-earned-commission-var",
+        "name": "EarnedCommission",
+        "formula": "ClosedArr <= AnnualQuota ? ClosedArr * BaseCommissionRate : AnnualQuota * BaseCommissionRate + (ClosedArr - AnnualQuota) * BaseCommissionRate * AcceleratorMultiplier"
+      },
+      {
+        "id": "sales-total-comp",
+        "type": "formula",
+        "varId": "sales-total-comp-var",
+        "name": "TotalCashCompensation",
+        "formula": "BaseSalary + EarnedCommission"
+      },
+      {
+        "id": "sales-summary",
+        "type": "paragraph",
+        "inline": [
+          "At ",
+          {
+            "name": "ClosedArr",
+            "type": "ref",
+            "varId": "sales-closed-arr-var"
+          },
+          " of closed ARR, the AE reaches ",
+          {
+            "name": "QuotaAttainment",
+            "type": "ref",
+            "varId": "sales-attainment-var"
+          },
+          " times quota and earns ",
+          {
+            "name": "EarnedCommission",
+            "type": "ref",
+            "varId": "sales-earned-commission-var"
+          },
+          " in commission."
+        ]
+      },
+      {
+        "id": "sales-takeaway",
+        "type": "bulletListItem",
+        "inline": [
+          "Total annual cash compensation becomes ",
+          {
+            "name": "TotalCashCompensation",
+            "type": "ref",
+            "varId": "sales-total-comp-var"
+          },
+          " versus OTE of ",
+          {
+            "name": "OnTargetEarnings",
+            "type": "ref",
+            "varId": "sales-ote-var"
+          },
+          "."
+        ]
+      }
+    ],
+    "scenarios": [
+      {
+        "id": "sales-ae-comp-plan-plan",
+        "name": "Plan",
+        "values": {
+          "sales-base-salary-var": 70000,
+          "sales-target-variable-var": 70000,
+          "sales-annual-quota-var": 700000,
+          "sales-closed-arr-var": 875000,
+          "sales-accelerator-var": 1.5
+        }
+      },
+      {
+        "id": "sales-ae-comp-plan-below-quota",
+        "name": "Below quota",
+        "values": {
+          "sales-base-salary-var": 70000,
+          "sales-target-variable-var": 70000,
+          "sales-annual-quota-var": 700000,
+          "sales-closed-arr-var": 560000,
+          "sales-accelerator-var": 1.5
+        }
+      },
+      {
+        "id": "sales-ae-comp-plan-blowout",
+        "name": "Blowout year",
+        "values": {
+          "sales-base-salary-var": 70000,
+          "sales-target-variable-var": 70000,
+          "sales-annual-quota-var": 700000,
+          "sales-closed-arr-var": 1225000,
+          "sales-accelerator-var": 2
+        }
+      }
+    ]
+  },
+  {
+    "id": "founders-runway-plan",
+    "description": "See how cash, recurring burn, and an optional hire change the company runway.",
+    "blocks": [
+      {
+        "id": "founders-heading",
+        "type": "heading",
+        "level": 1,
+        "inline": ["Founder runway planner"]
+      },
+      {
+        "id": "founders-intro",
+        "type": "paragraph",
+        "inline": [
+          "A monthly cash model for a small team deciding whether now is the right moment to add one more person. Toggle the hire, or apply a scenario, and read the runway in the last line."
+        ]
+      },
+      {
+        "id": "founders-cash-heading",
+        "type": "heading",
+        "level": 2,
+        "inline": ["Cash today"]
+      },
+      {
+        "id": "founders-cash-intro",
+        "type": "paragraph",
+        "inline": [
+          "The bank balance, what comes in each month, and what goes out before any new hire."
+        ]
+      },
+      {
+        "id": "founders-cash",
+        "type": "number",
+        "varId": "founders-cash-var",
+        "name": "CashBalance",
+        "value": 420000,
+        "format": "currency",
+        "currency": "EUR",
+        "min": 0
+      },
+      {
+        "id": "founders-revenue",
+        "type": "number",
+        "varId": "founders-revenue-var",
+        "name": "MonthlyRevenue",
+        "value": 28000,
+        "format": "currency",
+        "currency": "EUR",
+        "min": 0
+      },
+      {
+        "id": "founders-costs",
+        "type": "slider",
+        "varId": "founders-costs-var",
+        "name": "MonthlyOperatingCosts",
+        "value": 52000,
+        "format": "currency",
+        "currency": "EUR",
+        "min": 10000,
+        "max": 120000,
+        "step": 1000
+      },
+      {
+        "id": "founders-hire-heading",
+        "type": "heading",
+        "level": 2,
+        "inline": ["The hire"]
+      },
+      {
+        "id": "founders-hire-intro",
+        "type": "paragraph",
+        "inline": [
+          "One more person at a fully loaded monthly cost. The toggle is the decision."
+        ]
+      },
+      {
+        "id": "founders-hire-choice",
+        "type": "select",
+        "varId": "founders-hire-choice-var",
+        "name": "HireEnabled",
+        "value": 1,
+        "options": [
+          {
+            "label": "Not yet",
+            "value": 0
+          },
+          {
+            "label": "Yes, hire now",
+            "value": 1
+          }
+        ]
+      },
+      {
+        "id": "founders-hire-cost",
+        "type": "number",
+        "varId": "founders-hire-cost-var",
+        "name": "HireMonthlyCost",
+        "value": 8500,
+        "format": "currency",
+        "currency": "EUR",
+        "min": 0
+      },
+      {
+        "id": "founders-runway-heading",
+        "type": "heading",
+        "level": 2,
+        "inline": ["Burn and runway"]
+      },
+      {
+        "id": "founders-runway-intro",
+        "type": "paragraph",
+        "inline": [
+          "Total costs include the hire when it is on. Net burn is costs minus revenue, and runway is the cash balance divided by that burn."
+        ]
+      },
+      {
+        "id": "founders-total-costs",
+        "type": "formula",
+        "varId": "founders-total-costs-var",
+        "name": "TotalMonthlyCosts",
+        "formula": "MonthlyOperatingCosts + HireEnabled * HireMonthlyCost"
+      },
+      {
+        "id": "founders-net-burn",
+        "type": "formula",
+        "varId": "founders-net-burn-var",
+        "name": "MonthlyNetBurn",
+        "formula": "TotalMonthlyCosts - MonthlyRevenue"
+      },
+      {
+        "id": "founders-runway",
+        "type": "formula",
+        "varId": "founders-runway-var",
+        "name": "RunwayMonths",
+        "formula": "CashBalance / MonthlyNetBurn"
+      },
+      {
+        "id": "founders-summary",
+        "type": "paragraph",
+        "inline": [
+          "With monthly costs of ",
+          {
+            "name": "TotalMonthlyCosts",
+            "type": "ref",
+            "varId": "founders-total-costs-var"
+          },
+          " and revenue of ",
+          {
+            "name": "MonthlyRevenue",
+            "type": "ref",
+            "varId": "founders-revenue-var"
+          },
+          ", net burn is ",
+          {
+            "name": "MonthlyNetBurn",
+            "type": "ref",
+            "varId": "founders-net-burn-var"
+          },
+          "."
+        ]
+      },
+      {
+        "id": "founders-takeaway",
+        "type": "bulletListItem",
+        "inline": [
+          "The current cash balance funds about ",
+          {
+            "name": "RunwayMonths",
+            "type": "ref",
+            "varId": "founders-runway-var"
+          },
+          " months at this pace."
+        ]
+      }
+    ],
+    "scenarios": [
+      {
+        "id": "founders-runway-plan-hire-now",
+        "name": "Hire now",
+        "values": {
+          "founders-cash-var": 420000,
+          "founders-revenue-var": 28000,
+          "founders-costs-var": 52000,
+          "founders-hire-choice-var": 1,
+          "founders-hire-cost-var": 8500
+        }
+      },
+      {
+        "id": "founders-runway-plan-hold",
+        "name": "Hold the hire",
+        "values": {
+          "founders-cash-var": 420000,
+          "founders-revenue-var": 28000,
+          "founders-costs-var": 52000,
+          "founders-hire-choice-var": 0,
+          "founders-hire-cost-var": 8500
+        }
+      },
+      {
+        "id": "founders-runway-plan-revenue-dips",
+        "name": "Revenue dips",
+        "values": {
+          "founders-cash-var": 420000,
+          "founders-revenue-var": 20000,
+          "founders-costs-var": 52000,
+          "founders-hire-choice-var": 1,
+          "founders-hire-cost-var": 8500
+        }
+      }
+    ]
+  },
+  {
+    "id": "valencia-rent-vs-mortgage",
+    "description": "Compare monthly rent with the estimated carrying cost of buying a home in Valencia.",
+    "blocks": [
+      {
+        "id": "valencia-heading",
+        "type": "heading",
+        "level": 1,
+        "inline": ["Rent vs mortgage in Valencia"]
+      },
+      {
+        "id": "valencia-intro",
+        "type": "paragraph",
+        "inline": [
+          "A practical EUR comparison for a resale flat in Valencia: financing, community fees, IBI, insurance, and a maintenance reserve, against the rent for a comparable flat."
+        ]
+      },
+      {
+        "id": "valencia-renting-heading",
+        "type": "heading",
+        "level": 2,
+        "inline": ["Renting"]
+      },
+      {
+        "id": "valencia-renting-intro",
+        "type": "paragraph",
+        "inline": [
+          "The rent for a comparable flat. Move it to see where buying starts to win."
+        ]
+      },
+      {
+        "id": "valencia-rent",
+        "type": "slider",
+        "varId": "valencia-rent-var",
+        "name": "MonthlyRent",
+        "value": 1450,
+        "format": "currency",
+        "currency": "EUR",
+        "min": 700,
+        "max": 2500,
+        "step": 25
+      },
+      {
+        "id": "valencia-buying-heading",
+        "type": "heading",
+        "level": 2,
+        "inline": ["Buying"]
+      },
+      {
+        "id": "valencia-buying-intro",
+        "type": "paragraph",
+        "inline": [
+          "The price, the cash down, and the loan terms. The bank lends the rest at a fixed annual rate."
+        ]
+      },
+      {
+        "id": "valencia-price",
+        "type": "number",
+        "varId": "valencia-price-var",
+        "name": "PurchasePrice",
+        "value": 320000,
+        "format": "currency",
+        "currency": "EUR",
+        "min": 50000
+      },
+      {
+        "id": "valencia-down-payment",
+        "type": "number",
+        "varId": "valencia-down-payment-var",
+        "name": "DownPayment",
+        "value": 64000,
+        "format": "currency",
+        "currency": "EUR",
+        "min": 0
+      },
+      {
+        "id": "valencia-rate",
+        "type": "number",
+        "varId": "valencia-rate-var",
+        "name": "AnnualInterestRate",
+        "value": 3.25,
+        "format": "percent",
+        "min": 0.1,
+        "max": 12
+      },
+      {
+        "id": "valencia-term",
+        "type": "select",
+        "varId": "valencia-term-var",
+        "name": "MortgageYears",
+        "value": 30,
+        "options": [
+          {
+            "label": "20 years",
+            "value": 20
+          },
+          {
+            "label": "25 years",
+            "value": 25
+          },
+          {
+            "label": "30 years",
+            "value": 30
+          }
+        ]
+      },
+      {
+        "id": "valencia-owning-heading",
+        "type": "heading",
+        "level": 2,
+        "inline": ["Owning"]
+      },
+      {
+        "id": "valencia-owning-intro",
+        "type": "paragraph",
+        "inline": [
+          "Costs a tenant never sees: community fees, the IBI property tax, insurance, and a yearly maintenance reserve as a share of the price."
+        ]
+      },
+      {
+        "id": "valencia-community-fees",
+        "type": "number",
+        "varId": "valencia-community-fees-var",
+        "name": "MonthlyCommunityFees",
+        "value": 85,
+        "format": "currency",
+        "currency": "EUR",
+        "min": 0
+      },
+      {
+        "id": "valencia-ibi",
+        "type": "number",
+        "varId": "valencia-ibi-var",
+        "name": "AnnualIbi",
+        "value": 620,
+        "format": "currency",
+        "currency": "EUR",
+        "min": 0
+      },
+      {
+        "id": "valencia-insurance",
+        "type": "number",
+        "varId": "valencia-insurance-var",
+        "name": "AnnualHomeInsurance",
+        "value": 360,
+        "format": "currency",
+        "currency": "EUR",
+        "min": 0
+      },
+      {
+        "id": "valencia-maintenance-rate",
+        "type": "number",
+        "varId": "valencia-maintenance-rate-var",
+        "name": "AnnualMaintenanceRate",
+        "value": 0.6,
+        "format": "percent",
+        "min": 0,
+        "max": 3
+      },
+      {
+        "id": "valencia-comparison-heading",
+        "type": "heading",
+        "level": 2,
+        "inline": ["The comparison"]
+      },
+      {
+        "id": "valencia-comparison-intro",
+        "type": "paragraph",
+        "inline": [
+          "The loan of ",
+          {
+            "name": "LoanPrincipal",
+            "type": "ref",
+            "varId": "valencia-loan-var"
+          },
+          " is repaid over ",
+          {
+            "name": "MortgagePaymentCount",
+            "type": "ref",
+            "varId": "valencia-payment-count-var"
+          },
+          " monthly payments of ",
+          {
+            "name": "MonthlyMortgagePayment",
+            "type": "ref",
+            "varId": "valencia-mortgage-payment-var"
+          },
+          " each."
+        ]
+      },
+      {
+        "id": "valencia-loan",
+        "type": "formula",
+        "varId": "valencia-loan-var",
+        "name": "LoanPrincipal",
+        "formula": "PurchasePrice - DownPayment"
+      },
+      {
+        "id": "valencia-monthly-rate",
+        "type": "formula",
+        "varId": "valencia-monthly-rate-var",
+        "name": "MonthlyInterestRate",
+        "formula": "AnnualInterestRate / 12"
+      },
+      {
+        "id": "valencia-payment-count",
+        "type": "formula",
+        "varId": "valencia-payment-count-var",
+        "name": "MortgagePaymentCount",
+        "formula": "MortgageYears * 12"
+      },
+      {
+        "id": "valencia-mortgage-payment",
+        "type": "formula",
+        "varId": "valencia-mortgage-payment-var",
+        "name": "MonthlyMortgagePayment",
+        "formula": "LoanPrincipal * (MonthlyInterestRate * (1 + MonthlyInterestRate) ^ MortgagePaymentCount) / ((1 + MonthlyInterestRate) ^ MortgagePaymentCount - 1)"
+      },
+      {
+        "id": "valencia-owner-cost",
+        "type": "formula",
+        "varId": "valencia-owner-cost-var",
+        "name": "MonthlyOwnerCost",
+        "formula": "MonthlyMortgagePayment + MonthlyCommunityFees + AnnualIbi / 12 + AnnualHomeInsurance / 12 + PurchasePrice * AnnualMaintenanceRate / 12"
+      },
+      {
+        "id": "valencia-difference",
+        "type": "formula",
+        "varId": "valencia-difference-var",
+        "name": "BuyingMonthlyPremium",
+        "formula": "MonthlyOwnerCost - MonthlyRent"
+      },
+      {
+        "id": "valencia-summary",
+        "type": "paragraph",
+        "inline": [
+          "For a ",
+          {
+            "name": "PurchasePrice",
+            "type": "ref",
+            "varId": "valencia-price-var"
+          },
+          " home, the estimated monthly owner cost is ",
+          {
+            "name": "MonthlyOwnerCost",
+            "type": "ref",
+            "varId": "valencia-owner-cost-var"
+          },
+          ", compared with rent of ",
+          {
+            "name": "MonthlyRent",
+            "type": "ref",
+            "varId": "valencia-rent-var"
+          },
+          "."
+        ]
+      },
+      {
+        "id": "valencia-takeaway",
+        "type": "bulletListItem",
+        "inline": [
+          "The difference is ",
+          {
+            "name": "BuyingMonthlyPremium",
+            "type": "ref",
+            "varId": "valencia-difference-var"
+          },
+          " per month. A negative number means buying is cheaper on a cash-flow basis. This excludes one-off purchase taxes and notary or registry costs."
+        ]
+      }
+    ],
+    "scenarios": [
+      {
+        "id": "valencia-rent-vs-mortgage-today",
+        "name": "Today",
+        "values": {
+          "valencia-rent-var": 1450,
+          "valencia-price-var": 320000,
+          "valencia-down-payment-var": 64000,
+          "valencia-rate-var": 3.25,
+          "valencia-term-var": 30,
+          "valencia-community-fees-var": 85,
+          "valencia-ibi-var": 620,
+          "valencia-insurance-var": 360,
+          "valencia-maintenance-rate-var": 0.6
+        }
+      },
+      {
+        "id": "valencia-rent-vs-mortgage-rates-fall",
+        "name": "Rates fall",
+        "values": {
+          "valencia-rent-var": 1450,
+          "valencia-price-var": 320000,
+          "valencia-down-payment-var": 64000,
+          "valencia-rate-var": 2.5,
+          "valencia-term-var": 30,
+          "valencia-community-fees-var": 85,
+          "valencia-ibi-var": 620,
+          "valencia-insurance-var": 360,
+          "valencia-maintenance-rate-var": 0.6
+        }
+      },
+      {
+        "id": "valencia-rent-vs-mortgage-bigger-deposit",
+        "name": "Bigger deposit",
+        "values": {
+          "valencia-rent-var": 1450,
+          "valencia-price-var": 320000,
+          "valencia-down-payment-var": 96000,
+          "valencia-rate-var": 3.25,
+          "valencia-term-var": 30,
+          "valencia-community-fees-var": 85,
+          "valencia-ibi-var": 620,
+          "valencia-insurance-var": 360,
+          "valencia-maintenance-rate-var": 0.6
+        }
+      },
+      {
+        "id": "valencia-rent-vs-mortgage-shorter-loan",
+        "name": "Shorter loan",
+        "values": {
+          "valencia-rent-var": 1450,
+          "valencia-price-var": 320000,
+          "valencia-down-payment-var": 64000,
+          "valencia-rate-var": 3.25,
+          "valencia-term-var": 20,
+          "valencia-community-fees-var": 85,
+          "valencia-ibi-var": 620,
+          "valencia-insurance-var": 360,
+          "valencia-maintenance-rate-var": 0.6
+        }
+      }
+    ]
+  }
+]

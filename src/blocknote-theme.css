@@ -1,0 +1,83 @@
+/*
+ * BlockNote paints its own editor surface, so it cannot be styled with utility
+ * classes from the outside. These rules bind its theme variables and gutters to
+ * the shadcn design tokens. Everything else in the app is Tailwind.
+ */
+
+.bn-container .bn-editor {
+  padding-inline: 52px;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.bn-root[data-color-scheme] {
+  --bn-colors-editor-text: var(--foreground);
+  --bn-colors-editor-background: var(--background);
+  --bn-colors-menu-text: var(--popover-foreground);
+  --bn-colors-menu-background: var(--popover);
+  --bn-colors-hovered-text: var(--accent-foreground);
+  --bn-colors-hovered-background: var(--accent);
+  --bn-colors-selected-text: var(--primary-foreground);
+  --bn-colors-selected-background: var(--primary);
+  --bn-colors-border: var(--border);
+  --bn-colors-highlights-red-text: var(--destructive);
+  --bn-font-family: var(--font-sans);
+}
+
+.bn-container .bn-default-styles {
+  font-family: var(--font-sans);
+}
+
+.bn-container .bn-editor h1 {
+  font-variation-settings: "opsz" 32;
+}
+
+.bn-container .bn-side-menu {
+  --group-gap: 2px;
+  margin-top: 3px;
+  margin-left: -6px;
+}
+
+@media (max-width: 700px) {
+  .bn-container .bn-editor {
+    padding-inline: 22px;
+  }
+
+  .bn-container .bn-editor h1 {
+    font-size: 1.75rem;
+  }
+
+  .bn-container .bn-editor h2 {
+    font-size: 1.25rem;
+  }
+}
+
+.bn-container .modelo-block {
+  flex: 1;
+  min-width: 0;
+}
+
+.bn-container
+  .bn-editor
+  > .bn-block-group
+  > .bn-block-outer:nth-child(2):last-child
+  .bn-block-content[data-content-type="paragraph"]:has(
+    .ProseMirror-trailingBreak:only-child
+  ):after {
+  color: var(--muted-foreground);
+  content: "Type / for a block, @ for a variable, or ask your agent to write a section.";
+}
+
+.bn-container .bn-block-outer.modelo-changed > .bn-block > .bn-block-content {
+  animation: modelo-changed 1.2s ease-out;
+  border-radius: var(--radius);
+}
+
+@keyframes modelo-changed {
+  from {
+    box-shadow: 0 0 0 3px var(--ring);
+  }
+  to {
+    box-shadow: 0 0 0 3px transparent;
+  }
+}
